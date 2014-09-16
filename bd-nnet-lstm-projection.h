@@ -61,43 +61,36 @@ public:
         }
 
         w_gifo_x_.Resize(4*ncell_, input_dim_); 
-        w_gifo_x_.SetRandn();  
-        w_gifo_x_.Scale(param_stddev);
+        w_gifo_x_.SetRandn();  w_gifo_x_.Scale(param_stddev);
 
         w_gifo_r_.Resize(4*ncell_, nrecur_);    
-        w_gifo_r_.SetRandn();  
-        w_gifo_r_.Scale(param_stddev);
+        w_gifo_r_.SetRandn();  w_gifo_r_.Scale(param_stddev);
 
         bias_.Resize(4*ncell_);     
-        bias_.SetRandn();      
-        bias_.Scale(param_stddev);
+        bias_.SetRandn();  bias_.Scale(param_stddev);
+
+        peephole_i_c_.Resize(ncell_);
+        peephole_i_c_.SetRandn();  peephole_i_c_.Scale(param_stddev);
+
+        peephole_f_c_.Resize(ncell_);
+        peephole_f_c_.SetRandn();  peephole_f_c_.Scale(param_stddev);
+
+        peephole_o_c_.Resize(ncell_);
+        peephole_o_c_.SetRandn();  peephole_o_c_.Scale(param_stddev);
 
         w_r_m_.Resize(nrecur_, ncell_); 
-        w_r_m_.SetRandn();     
-        w_r_m_.Scale(param_stddev);
+        w_r_m_.SetRandn();  w_r_m_.Scale(param_stddev);
 
-        w_i_c_.Resize(ncell_);
-        w_i_c_.SetRandn();
-        w_i_c_.Scale(param_stddev);
-
-        w_f_c_.Resize(ncell_);
-        w_f_c_.SetRandn();
-        w_f_c_.Scale(param_stddev);
-
-        w_o_c_.Resize(ncell_);
-        w_o_c_.SetRandn();
-        w_o_c_.Scale(param_stddev);
-
-        // init delta buffers
+        // delta buffers need to be initialized during component init (due to momentum)
         w_gifo_x_corr_.Resize(4*ncell_, input_dim_, kSetZero); 
         w_gifo_r_corr_.Resize(4*ncell_, nrecur_, kSetZero);    
         bias_corr_.Resize(4*ncell_, kSetZero);     
 
-        w_r_m_corr_.Resize(nrecur_, ncell_, kSetZero); 
+        peephole_i_c_corr_.Resize(ncell_, kSetZero);
+        peephole_f_c_corr_.Resize(ncell_, kSetZero);
+        peephole_o_c_corr_.Resize(ncell_, kSetZero);
 
-        w_i_c_corr_.Resize(ncell_, kSetZero);
-        w_f_c_corr_.Resize(ncell_, kSetZero);
-        w_o_c_corr_.Resize(ncell_, kSetZero);
+        w_r_m_corr_.Resize(nrecur_, ncell_, kSetZero); 
     }
 
     void ReadData(std::istream &is, bool binary) {
@@ -112,22 +105,22 @@ public:
         w_gifo_r_.Read(is, binary);
         bias_.Read(is, binary);
 
+        peephole_i_c_.Read(is, binary);
+        peephole_f_c_.Read(is, binary);
+        peephole_o_c_.Read(is, binary);
+
         w_r_m_.Read(is, binary);
 
-        w_i_c_.Read(is, binary);
-        w_f_c_.Read(is, binary);
-        w_o_c_.Read(is, binary);
-
-        // init delta buffers
+        // delta buffers need to be initialized during model load-in (due to momentum)
         w_gifo_x_corr_.Resize(4*ncell_, input_dim_, kSetZero); 
         w_gifo_r_corr_.Resize(4*ncell_, nrecur_, kSetZero);    
         bias_corr_.Resize(4*ncell_, kSetZero);     
 
-        w_r_m_corr_.Resize(nrecur_, ncell_, kSetZero); 
+        peephole_i_c_corr_.Resize(ncell_, kSetZero);
+        peephole_f_c_corr_.Resize(ncell_, kSetZero);
+        peephole_o_c_corr_.Resize(ncell_, kSetZero);
 
-        w_i_c_corr_.Resize(ncell_, kSetZero);
-        w_f_c_corr_.Resize(ncell_, kSetZero);
-        w_o_c_corr_.Resize(ncell_, kSetZero);
+        w_r_m_corr_.Resize(nrecur_, ncell_, kSetZero); 
     }
 
     void WriteData(std::ostream &os, bool binary) const {
@@ -139,12 +132,13 @@ public:
         w_gifo_r_.Write(os, binary);
         bias_.Write(os, binary);
 
-        w_r_m_.Write(os, binary);
+        peephole_i_c_.Write(os, binary);
+        peephole_f_c_.Write(os, binary);
+        peephole_o_c_.Write(os, binary);
 
-        w_i_c_.Write(os, binary);
-        w_f_c_.Write(os, binary);
-        w_o_c_.Write(os, binary);
+        w_r_m_.Write(os, binary);
     }
+
     // TODO
     int32 NumParams() const { 
         return 1;
@@ -161,11 +155,11 @@ public:
             "\n  w_gifo_r_  " + MomentStatistics(w_gifo_r_) +
             "\n  bias_  " + MomentStatistics(bias_) +
 
-            "\n  w_r_m_  " + MomentStatistics(w_r_m_) +
+            "\n  peephole_i_c_  " + MomentStatistics(peephole_i_c_) +
+            "\n  peephole_f_c_  " + MomentStatistics(peephole_f_c_) +
+            "\n  peephole_o_c_  " + MomentStatistics(peephole_o_c_) +
 
-            "\n  w_i_c_  " + MomentStatistics(w_i_c_) +
-            "\n  w_f_c_  " + MomentStatistics(w_f_c_) +
-            "\n  w_o_c_  " + MomentStatistics(w_o_c_);
+            "\n  w_r_m_  " + MomentStatistics(w_r_m_);
     }
   
     std::string InfoGradient() const {
@@ -174,11 +168,11 @@ public:
             "\n  w_gifo_r_corr_  " + MomentStatistics(w_gifo_r_corr_) +
             "\n  bias_corr_  " + MomentStatistics(bias_corr_) +
 
-            "\n  w_r_m_corr_  " + MomentStatistics(w_r_m_corr_) +
+            "\n  peephole_i_c_corr_  " + MomentStatistics(peephole_i_c_corr_) +
+            "\n  peephole_f_c_corr_  " + MomentStatistics(peephole_f_c_corr_) +
+            "\n  peephole_o_c_corr_  " + MomentStatistics(peephole_o_c_corr_) +
 
-            "\n  w_i_c_corr_  " + MomentStatistics(w_i_c_corr_) +
-            "\n  w_f_c_corr_  " + MomentStatistics(w_f_c_corr_) +
-            "\n  w_o_c_corr_  " + MomentStatistics(w_o_c_corr_);
+            "\n  w_r_m_corr_  " + MomentStatistics(w_r_m_corr_);
     }
 
     void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
@@ -194,17 +188,14 @@ public:
         CuSubMatrix<BaseFloat> Y_h(propagate_buf_.ColRange(5*ncell_, ncell_));
         CuSubMatrix<BaseFloat> Y_m(propagate_buf_.ColRange(6*ncell_, ncell_));
         CuSubMatrix<BaseFloat> Y_r(propagate_buf_.ColRange(7*ncell_, nrecur_));
-
         CuSubMatrix<BaseFloat> Y_gifo(propagate_buf_.ColRange(0, 4*ncell_));
 
-        // process x and bias all in once
+        // propagate x and add bias all in once
         Y_gifo.AddMatMat(1.0, in, kNoTrans, w_gifo_x_, kTrans, 0.0);
         Y_gifo.AddVecToRows(1.0, bias_);
 
         CuMatrix<BaseFloat> add_buf(1, ncell_, kUndefined);
         for (int t = 0; t < T; t++) {
-            //CuSubMatrix<BaseFloat> x(in.RowRange(t,1));
-    
             CuSubMatrix<BaseFloat> y_g(Y_g.RowRange(t,1));
             CuSubMatrix<BaseFloat> y_i(Y_i.RowRange(t,1));
             CuSubMatrix<BaseFloat> y_f(Y_f.RowRange(t,1));
@@ -221,11 +212,11 @@ public:
                 y_gifo.AddMatMat(1.0, Y_r.RowRange(t-1,1), kNoTrans, w_gifo_r_, kTrans, 1.0);
                 // peephole c(t-1) to i(t)
                 add_buf.CopyFromMat(Y_c.RowRange(t-1,1)); 
-                add_buf.MulColsVec(w_i_c_);
+                add_buf.MulColsVec(peephole_i_c_);
                 y_i.AddMat(1.0, add_buf);
                 // peephole c(t-1) to f(t)
                 add_buf.CopyFromMat(Y_c.RowRange(t-1,1));
-                add_buf.MulColsVec(w_f_c_);
+                add_buf.MulColsVec(peephole_f_c_);
                 y_f.AddMat(1.0, add_buf);
             }
 
@@ -256,7 +247,7 @@ public:
     
             // o output gate
             add_buf.CopyFromMat(y_c);
-            add_buf.MulColsVec(w_o_c_);
+            add_buf.MulColsVec(peephole_o_c_);
             y_o.AddMat(1.0, add_buf);
             y_o.Sigmoid(y_o);
     
@@ -267,7 +258,7 @@ public:
             // r
             y_r.AddMatMat(1.0, y_m, kNoTrans, w_r_m_, kTrans, 0.0);
 
-            // TODO: now projection are all recurrent
+            // TODO: add non-recursive node in projection layer (projection layer is full recursive for now)
             out->RowRange(t,1).CopyFromMat(y_r);
 
             //// debug info
@@ -301,6 +292,7 @@ public:
     
         // backpropagate buffers to compute
         backpropagate_buf_.Resize(T, 7 * ncell_ + nrecur_, kSetZero);
+
         CuSubMatrix<BaseFloat> D_g(backpropagate_buf_.ColRange(0*ncell_, ncell_));
         CuSubMatrix<BaseFloat> D_i(backpropagate_buf_.ColRange(1*ncell_, ncell_));
         CuSubMatrix<BaseFloat> D_f(backpropagate_buf_.ColRange(2*ncell_, ncell_));
@@ -309,6 +301,7 @@ public:
         CuSubMatrix<BaseFloat> D_h(backpropagate_buf_.ColRange(5*ncell_, ncell_));
         CuSubMatrix<BaseFloat> D_m(backpropagate_buf_.ColRange(6*ncell_, ncell_));
         CuSubMatrix<BaseFloat> D_r(backpropagate_buf_.ColRange(7*ncell_, nrecur_));
+
         CuSubMatrix<BaseFloat> D_gifo(backpropagate_buf_.ColRange(0, 4*ncell_));
     
         CuMatrix<BaseFloat> add_buf(1, ncell_, kUndefined);
@@ -338,7 +331,7 @@ public:
     
             if (t < T-1) {
                 // in Alex Grave's PhD dissertation,
-                // he don't backpropagate error from i(t+1), f(t+1), o(t+1) to r(t),
+                // he didn't backpropagate error from i(t+1), f(t+1), o(t+1) to r(t),
                 // we compute precise gradient here anyway
                 d_r.AddMatMat(1.0, D_gifo.RowRange(t+1,1), kNoTrans, w_gifo_r_, kNoTrans, 1.0);
             }
@@ -358,7 +351,7 @@ public:
             //     1. diff from h(t)
             d_c.CopyFromMat(d_h);  
             //     2. diff from output-gate(t) (via peephole)
-            add_buf.CopyFromMat(d_o); add_buf.MulColsVec(w_o_c_);  
+            add_buf.CopyFromMat(d_o); add_buf.MulColsVec(peephole_o_c_);  
             d_c.AddMat(1.0, add_buf);  
     
             if (t < T-1) {
@@ -366,10 +359,10 @@ public:
                 add_buf.CopyFromMat(D_c.RowRange(t+1,1)); add_buf.MulElements(Y_f.RowRange(t+1,1));  
                 d_c.AddMat(1.0, add_buf);  
                 // 4. diff from forget-gate(t+1) (via peephole)
-                add_buf.CopyFromMat(D_f.RowRange(t+1,1)); add_buf.MulColsVec(w_f_c_);  
+                add_buf.CopyFromMat(D_f.RowRange(t+1,1)); add_buf.MulColsVec(peephole_f_c_);  
                 d_c.AddMat(1.0, add_buf);
                 // 5. diff from input-gate(t+1) (via peephole)
-                add_buf.CopyFromMat(D_i.RowRange(t+1,1)); add_buf.MulColsVec(w_i_c_);  
+                add_buf.CopyFromMat(D_i.RowRange(t+1,1)); add_buf.MulColsVec(peephole_i_c_);  
                 d_c.AddMat(1.0, add_buf);
             }
     
@@ -423,17 +416,17 @@ public:
         buf.SetZero();
         buf.RowRange(0,T-1).CopyFromMat(Y_c.RowRange(0,T-1));
         buf.RowRange(0,T-1).MulElements(D_i.RowRange(1, T-1));
-        w_i_c_corr_.AddRowSumMat(-lr, buf.RowRange(0,T-1), mmt);
+        peephole_i_c_corr_.AddRowSumMat(-lr, buf.RowRange(0,T-1), mmt);
     
         buf.SetZero();
         buf.RowRange(0,T-1).CopyFromMat(Y_c.RowRange(0,T-1));
         buf.RowRange(0,T-1).MulElements(D_f.RowRange(1, T-1));
-        w_f_c_corr_.AddRowSumMat(-lr, buf.RowRange(0,T-1), mmt);
+        peephole_f_c_corr_.AddRowSumMat(-lr, buf.RowRange(0,T-1), mmt);
     
         buf.SetZero();
         buf.CopyFromMat(Y_c);
         buf.MulElements(D_o);
-        w_o_c_corr_.AddRowSumMat(-lr, buf, mmt);
+        peephole_o_c_corr_.AddRowSumMat(-lr, buf, mmt);
     
         //// debug info
         //std::cerr << "delta: \n";
@@ -441,9 +434,9 @@ public:
         //std::cerr << "w_gifo_r_corr_ " << w_gifo_r_corr_;
         //std::cerr << "bias_corr_ " << bias_corr_;
         //std::cerr << "w_r_m_corr_ " << w_r_m_corr_;
-        //std::cerr << "w_i_c_corr_ " << w_i_c_corr_;
-        //std::cerr << "w_f_c_corr_ " << w_f_c_corr_;
-        //std::cerr << "w_o_c_corr_ " << w_o_c_corr_;
+        //std::cerr << "peephole_i_c_corr_ " << peephole_i_c_corr_;
+        //std::cerr << "peephole_f_c_corr_ " << peephole_f_c_corr_;
+        //std::cerr << "peephole_o_c_corr_ " << peephole_o_c_corr_;
     
     }
 
@@ -454,9 +447,9 @@ void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> 
 
     w_r_m_.AddMat(1.0, w_r_m_corr_);
 
-    w_i_c_.AddVec(1.0, w_i_c_corr_);
-    w_f_c_.AddVec(1.0, w_f_c_corr_);
-    w_o_c_.AddVec(1.0, w_o_c_corr_);
+    peephole_i_c_.AddVec(1.0, peephole_i_c_corr_);
+    peephole_f_c_.AddVec(1.0, peephole_f_c_corr_);
+    peephole_o_c_.AddVec(1.0, peephole_o_c_corr_);
 }
 
 private:
@@ -467,35 +460,36 @@ private:
     int32 ncell_;   // number of cells (one cell per memory block)
     int32 nrecur_;  // size of recurrent projection layer
 
-    // feed-forward connections: from x to g, i, f, o
+    // feed-forward connections: from x to [g, i, f, o]
     CuMatrix<BaseFloat> w_gifo_x_;
     CuMatrix<BaseFloat> w_gifo_x_corr_;
 
-    // recurrent projection connections: from r to g, i, f, o
+    // recurrent projection connections: from r to [g, i, f, o]
     CuMatrix<BaseFloat> w_gifo_r_;
     CuMatrix<BaseFloat> w_gifo_r_corr_;
 
-    // bias
+    // biases of [g, i, f, o]
     CuVector<BaseFloat> bias_;
     CuVector<BaseFloat> bias_corr_;
 
-    // projection connection: from m to r
+    // peephole from c to i, f, g 
+    // peephole connections are block-internal, so we use vector form
+    CuVector<BaseFloat> peephole_i_c_;
+    CuVector<BaseFloat> peephole_f_c_;
+    CuVector<BaseFloat> peephole_o_c_;
+
+    CuVector<BaseFloat> peephole_i_c_corr_;
+    CuVector<BaseFloat> peephole_f_c_corr_;
+    CuVector<BaseFloat> peephole_o_c_corr_;
+
+    // projection layer r: from m to r
     CuMatrix<BaseFloat> w_r_m_;
     CuMatrix<BaseFloat> w_r_m_corr_;
 
-    // peephole connection: from c to i, f, g
-    CuVector<BaseFloat> w_i_c_;
-    CuVector<BaseFloat> w_f_c_;
-    CuVector<BaseFloat> w_o_c_;
-
-    CuVector<BaseFloat> w_i_c_corr_;
-    CuVector<BaseFloat> w_f_c_corr_;
-    CuVector<BaseFloat> w_o_c_corr_;
-
-    // propagate buffer: neuron output (activations)
+    // propagate buffer: output of [g, i, f, o, c, h, m, r]
     CuMatrix<BaseFloat> propagate_buf_;
 
-    // back-propagate buffer: diff to neuron input
+    // back-propagate buffer: diff-input of [g, i, f, o, c, h, m, r]
     CuMatrix<BaseFloat> backpropagate_buf_;
 
 };
