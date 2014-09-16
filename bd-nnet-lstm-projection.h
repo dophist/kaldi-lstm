@@ -409,8 +409,6 @@ public:
         w_gifo_r_corr_.AddMatMat(-lr, D_gifo.RowRange(1,T-1), kTrans, Y_r.RowRange(0,T-1), kNoTrans, mmt);
         bias_corr_.AddRowSumMat(-lr, D_gifo, mmt);
     
-        w_r_m_corr_.AddMatMat(-lr, D_r, kTrans, Y_m, kNoTrans, mmt);
-    
         CuMatrix<BaseFloat> buf(T, ncell_, kUndefined);
     
         buf.SetZero();
@@ -427,6 +425,8 @@ public:
         buf.CopyFromMat(Y_c);
         buf.MulElements(D_o);
         peephole_o_c_corr_.AddRowSumMat(-lr, buf, mmt);
+
+        w_r_m_corr_.AddMatMat(-lr, D_r, kTrans, Y_m, kNoTrans, mmt);
     
         //// debug info
         //std::cerr << "delta: \n";
@@ -440,17 +440,17 @@ public:
     
     }
 
-void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> &diff) {
-    w_gifo_x_.AddMat(1.0, w_gifo_x_corr_);
-    w_gifo_r_.AddMat(1.0, w_gifo_r_corr_);
-    bias_.AddVec(1.0, bias_corr_);
-
-    w_r_m_.AddMat(1.0, w_r_m_corr_);
-
-    peephole_i_c_.AddVec(1.0, peephole_i_c_corr_);
-    peephole_f_c_.AddVec(1.0, peephole_f_c_corr_);
-    peephole_o_c_.AddVec(1.0, peephole_o_c_corr_);
-}
+    void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> &diff) {
+        w_gifo_x_.AddMat(1.0, w_gifo_x_corr_);
+        w_gifo_r_.AddMat(1.0, w_gifo_r_corr_);
+        bias_.AddVec(1.0, bias_corr_);
+    
+        peephole_i_c_.AddVec(1.0, peephole_i_c_corr_);
+        peephole_f_c_.AddVec(1.0, peephole_f_c_corr_);
+        peephole_o_c_.AddVec(1.0, peephole_o_c_corr_);
+    
+        w_r_m_.AddMat(1.0, w_r_m_corr_);
+    }
 
 private:
     /* network topology parameters */
