@@ -35,13 +35,13 @@ public:
     Component* Copy() const { return new LstmProjection(*this); }
     ComponentType GetType() const { return kLstmProjection; }
 
-    static void InitMatrixParam(CuMatrix<BaseFloat> &m, float scale) {
+    static void InitMatParam(CuMatrix<BaseFloat> &m, float scale) {
         m.SetRandUniform();  // uniform in [0, 1]
         m.Add(-0.5);         // uniform in [-0.5, 0.5]
         m.Scale(2 * scale);  // uniform in [-scale, +scale]
     }
 
-    static void InitVectorParam(CuVector<BaseFloat> &v, float scale) {
+    static void InitVecParam(CuVector<BaseFloat> &v, float scale) {
         Vector<BaseFloat> tmp(v.Dim());
         for (int i=0; i < tmp.Dim(); i++) {
             tmp(i) = (RandUniform() - 0.5) * 2 * scale;
@@ -88,14 +88,14 @@ public:
 //        w_r_m_.SetRandn();  w_r_m_.Scale(param_scale);
 
         // init weight and bias (Uniform)
-        w_gifo_x_.Resize(4*ncell_, input_dim_);  InitMatrixParam(w_gifo_x_, param_scale);
-        w_gifo_r_.Resize(4*ncell_, nrecur_);     InitMatrixParam(w_gifo_r_, param_scale);
-        w_r_m_.Resize(nrecur_, ncell_);          InitMatrixParam(w_r_m_, param_scale);
+        w_gifo_x_.Resize(4*ncell_, input_dim_);  InitMatParam(w_gifo_x_, param_scale);
+        w_gifo_r_.Resize(4*ncell_, nrecur_);     InitMatParam(w_gifo_r_, param_scale);
+        w_r_m_.Resize(nrecur_, ncell_);          InitMatParam(w_r_m_, param_scale);
 
-        bias_.Resize(4*ncell_);        InitVectorParam(bias_, param_scale);
-        peephole_i_c_.Resize(ncell_);  InitVectorParam(peephole_i_c_, param_scale);
-        peephole_f_c_.Resize(ncell_);  InitVectorParam(peephole_f_c_, param_scale);
-        peephole_o_c_.Resize(ncell_);  InitVectorParam(peephole_o_c_, param_scale);
+        bias_.Resize(4*ncell_);        InitVecParam(bias_, param_scale);
+        peephole_i_c_.Resize(ncell_);  InitVecParam(peephole_i_c_, param_scale);
+        peephole_f_c_.Resize(ncell_);  InitVecParam(peephole_f_c_, param_scale);
+        peephole_o_c_.Resize(ncell_);  InitVecParam(peephole_o_c_, param_scale);
 
         // init delta buffers
         w_gifo_x_corr_.Resize(4*ncell_, input_dim_, kSetZero); 
