@@ -1,4 +1,4 @@
-LSTM-projection implementation in Kaldi nnet1
+LSTM-projection BPTT in Kaldi nnet1
 ===
 Diagram
 ---
