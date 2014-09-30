@@ -25,11 +25,8 @@ class LstmProjection : public UpdatableComponent {
 public:
     LstmProjection(int32 input_dim, int32 output_dim) :
         UpdatableComponent(input_dim, output_dim),
-        input_dim_(input_dim),
-        output_dim_(output_dim),
-        inverse_(false),
         ncell_(0),
-        nrecur_(0)
+        nrecur_(output_dim)  // recurrent projection layer is also feed-forward as LSTM output
     { }
 
     ~LstmProjection()
@@ -38,50 +35,69 @@ public:
     Component* Copy() const { return new LstmProjection(*this); }
     ComponentType GetType() const { return kLstmProjection; }
 
+    static void InitMatrixParam(CuMatrix<BaseFloat> &m, float scale) {
+        m.SetRandUniform();  // uniform in [0, 1]
+        m.Add(-0.5);         // uniform in [-0.5, 0.5]
+        m.Scale(2 * scale);  // uniform in [-scale, +scale]
+    }
+
+    static void InitVectorParam(CuVector<BaseFloat> &v, float scale) {
+        Vector<BaseFloat> tmp(v.Dim());
+        for (int i=0; i < tmp.Dim(); i++) {
+            tmp(i) = (RandUniform() - 0.5) * 2 * scale;
+        }
+        v = tmp;
+    }
+
     void InitData(std::istream &is) {
         // define options
-        float param_stddev = 0.1;
+        float param_scale = 0.02;
         // parse config
         std::string token;
         while (!is.eof()) {
             ReadToken(is, false, &token); 
-            if(token == "<Inverse>") 
-                ReadBasicType(is, false, &inverse_);
-            else if (token == "<NumCell>") 
+            if (token == "<CellDim>") 
                 ReadBasicType(is, false, &ncell_);
-            else if (token == "<NumRecur>") 
-                ReadBasicType(is, false, &nrecur_);
-            else if (token == "<ParamStddev>") 
-                ReadBasicType(is, false, &param_stddev);
-            else if (token == "") 
-                ReadBasicType(is, false, &param_stddev);
+            else if (token == "<ParamScale>") 
+                ReadBasicType(is, false, &param_scale);
             else KALDI_ERR << "Unknown token " << token << ", a typo in config?"
-                           << " (Inverse|NumCell|NumRecur|ParamStddev)";
+                           << " (CellDim|ParamScale)";
             is >> std::ws; // eat-up whitespace
         }
 
-        w_gifo_x_.Resize(4*ncell_, input_dim_); 
-        w_gifo_x_.SetRandn();  w_gifo_x_.Scale(param_stddev);
+//        // init weight and bias (Gaussian)
+//        w_gifo_x_.Resize(4*ncell_, input_dim_); 
+//        w_gifo_x_.SetRandn();  w_gifo_x_.Scale(param_scale);
+//
+//        w_gifo_r_.Resize(4*ncell_, nrecur_);    
+//        w_gifo_r_.SetRandn();  w_gifo_r_.Scale(param_scale);
+//
+//        bias_.Resize(4*ncell_);     
+//        bias_.SetRandn();  bias_.Scale(param_scale);
+//
+//        peephole_i_c_.Resize(ncell_);
+//        peephole_i_c_.SetRandn();  peephole_i_c_.Scale(param_scale);
+//
+//        peephole_f_c_.Resize(ncell_);
+//        peephole_f_c_.SetRandn();  peephole_f_c_.Scale(param_scale);
+//
+//        peephole_o_c_.Resize(ncell_);
+//        peephole_o_c_.SetRandn();  peephole_o_c_.Scale(param_scale);
+//
+//        w_r_m_.Resize(nrecur_, ncell_); 
+//        w_r_m_.SetRandn();  w_r_m_.Scale(param_scale);
 
-        w_gifo_r_.Resize(4*ncell_, nrecur_);    
-        w_gifo_r_.SetRandn();  w_gifo_r_.Scale(param_stddev);
+        // init weight and bias (Uniform)
+        w_gifo_x_.Resize(4*ncell_, input_dim_);  InitMatrixParam(w_gifo_x_, param_scale);
+        w_gifo_r_.Resize(4*ncell_, nrecur_);     InitMatrixParam(w_gifo_r_, param_scale);
+        w_r_m_.Resize(nrecur_, ncell_);          InitMatrixParam(w_r_m_, param_scale);
 
-        bias_.Resize(4*ncell_);     
-        bias_.SetRandn();  bias_.Scale(param_stddev);
+        bias_.Resize(4*ncell_);        InitVectorParam(bias_, param_scale);
+        peephole_i_c_.Resize(ncell_);  InitVectorParam(peephole_i_c_, param_scale);
+        peephole_f_c_.Resize(ncell_);  InitVectorParam(peephole_f_c_, param_scale);
+        peephole_o_c_.Resize(ncell_);  InitVectorParam(peephole_o_c_, param_scale);
 
-        peephole_i_c_.Resize(ncell_);
-        peephole_i_c_.SetRandn();  peephole_i_c_.Scale(param_stddev);
-
-        peephole_f_c_.Resize(ncell_);
-        peephole_f_c_.SetRandn();  peephole_f_c_.Scale(param_stddev);
-
-        peephole_o_c_.Resize(ncell_);
-        peephole_o_c_.SetRandn();  peephole_o_c_.Scale(param_stddev);
-
-        w_r_m_.Resize(nrecur_, ncell_); 
-        w_r_m_.SetRandn();  w_r_m_.Scale(param_stddev);
-
-        // delta buffers need to be initialized during component init (due to momentum)
+        // init delta buffers
         w_gifo_x_corr_.Resize(4*ncell_, input_dim_, kSetZero); 
         w_gifo_r_corr_.Resize(4*ncell_, nrecur_, kSetZero);    
         bias_corr_.Resize(4*ncell_, kSetZero);     
@@ -94,12 +110,8 @@ public:
     }
 
     void ReadData(std::istream &is, bool binary) {
-        ReadBasicType(is, binary, &inverse_);
+        ExpectToken(is, binary, "<CellDim>");
         ReadBasicType(is, binary, &ncell_);
-        ReadBasicType(is, binary, &nrecur_);
-
-        // TODO
-        KALDI_ASSERT(nrecur_ == output_dim_);
 
         w_gifo_x_.Read(is, binary);
         w_gifo_r_.Read(is, binary);
@@ -111,7 +123,7 @@ public:
 
         w_r_m_.Read(is, binary);
 
-        // delta buffers need to be initialized during model load-in (due to momentum)
+        // init delta buffers
         w_gifo_x_corr_.Resize(4*ncell_, input_dim_, kSetZero); 
         w_gifo_r_corr_.Resize(4*ncell_, nrecur_, kSetZero);    
         bias_corr_.Resize(4*ncell_, kSetZero);     
@@ -124,9 +136,8 @@ public:
     }
 
     void WriteData(std::ostream &os, bool binary) const {
-        WriteBasicType(os, binary, inverse_);
+        WriteToken(os, binary, "<CellDim>");
         WriteBasicType(os, binary, ncell_);
-        WriteBasicType(os, binary, nrecur_);
 
         w_gifo_x_.Write(os, binary);
         w_gifo_r_.Write(os, binary);
@@ -151,312 +162,274 @@ public:
     }
     std::string Info() const {
         return std::string("    ") + 
-            "\n  w_gifo_x_  " + MomentStatistics(w_gifo_x_) + 
-            "\n  w_gifo_r_  " + MomentStatistics(w_gifo_r_) +
-            "\n  bias_  " + MomentStatistics(bias_) +
-
+            "\n  w_gifo_x_  "     + MomentStatistics(w_gifo_x_) + 
+            "\n  w_gifo_r_  "     + MomentStatistics(w_gifo_r_) +
+            "\n  bias_  "         + MomentStatistics(bias_) +
             "\n  peephole_i_c_  " + MomentStatistics(peephole_i_c_) +
             "\n  peephole_f_c_  " + MomentStatistics(peephole_f_c_) +
             "\n  peephole_o_c_  " + MomentStatistics(peephole_o_c_) +
-
-            "\n  w_r_m_  " + MomentStatistics(w_r_m_);
+            "\n  w_r_m_  "        + MomentStatistics(w_r_m_);
     }
   
     std::string InfoGradient() const {
         return std::string("    ") + 
-            "\n  w_gifo_x_corr_  " + MomentStatistics(w_gifo_x_corr_) + 
-            "\n  w_gifo_r_corr_  " + MomentStatistics(w_gifo_r_corr_) +
-            "\n  bias_corr_  " + MomentStatistics(bias_corr_) +
-
+            "\n  w_gifo_x_corr_  "     + MomentStatistics(w_gifo_x_corr_) + 
+            "\n  w_gifo_r_corr_  "     + MomentStatistics(w_gifo_r_corr_) +
+            "\n  bias_corr_  "         + MomentStatistics(bias_corr_) +
             "\n  peephole_i_c_corr_  " + MomentStatistics(peephole_i_c_corr_) +
             "\n  peephole_f_c_corr_  " + MomentStatistics(peephole_f_c_corr_) +
             "\n  peephole_o_c_corr_  " + MomentStatistics(peephole_o_c_corr_) +
-
-            "\n  w_r_m_corr_  " + MomentStatistics(w_r_m_corr_);
+            "\n  w_r_m_corr_  "        + MomentStatistics(w_r_m_corr_);
     }
 
     void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
+        int DEBUG = 0;
         int32 T = in.NumRows();
         // resize & clear propagate buffers
         propagate_buf_.Resize(T, 7 * ncell_ + nrecur_, kSetZero);
 
-        CuSubMatrix<BaseFloat> Y_g(propagate_buf_.ColRange(0*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_i(propagate_buf_.ColRange(1*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_f(propagate_buf_.ColRange(2*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_o(propagate_buf_.ColRange(3*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_c(propagate_buf_.ColRange(4*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_h(propagate_buf_.ColRange(5*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_m(propagate_buf_.ColRange(6*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_r(propagate_buf_.ColRange(7*ncell_, nrecur_));
-        CuSubMatrix<BaseFloat> Y_gifo(propagate_buf_.ColRange(0, 4*ncell_));
+        // disassemble entire neuron activation buffer into different neurons
+        CuSubMatrix<BaseFloat> YG(propagate_buf_.ColRange(0*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YI(propagate_buf_.ColRange(1*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YF(propagate_buf_.ColRange(2*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YO(propagate_buf_.ColRange(3*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YC(propagate_buf_.ColRange(4*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YH(propagate_buf_.ColRange(5*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YM(propagate_buf_.ColRange(6*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YR(propagate_buf_.ColRange(7*ncell_, nrecur_));
 
-        // propagate x and add bias all in once
-        Y_gifo.AddMatMat(1.0, in, kNoTrans, w_gifo_x_, kTrans, 0.0);
-        Y_gifo.AddVecToRows(1.0, bias_);
+        CuSubMatrix<BaseFloat> YGIFO(propagate_buf_.ColRange(0, 4*ncell_));
 
-        CuMatrix<BaseFloat> add_buf(1, ncell_, kUndefined);
+        // (x & bias) -> g, i, f, o, not recursive, do it all in once
+        YGIFO.AddMatMat(1.0, in, kNoTrans, w_gifo_x_, kTrans, 0.0);
+        YGIFO.AddVecToRows(1.0, bias_);
+
         for (int t = 0; t < T; t++) {
-            CuSubMatrix<BaseFloat> y_g(Y_g.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_i(Y_i.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_f(Y_f.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_o(Y_o.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_c(Y_c.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_h(Y_h.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_m(Y_m.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_r(Y_r.RowRange(t,1));
+            // (vector & matrix) representations of neuron activations at frame t 
+            // so we can borrow rich APIs from both CuMatrix and CuVector
+            CuSubVector<BaseFloat> y_g(YG.Row(t));  CuSubMatrix<BaseFloat> YG_t(YG.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_i(YI.Row(t));  CuSubMatrix<BaseFloat> YI_t(YI.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_f(YF.Row(t));  CuSubMatrix<BaseFloat> YF_t(YF.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_o(YO.Row(t));  CuSubMatrix<BaseFloat> YO_t(YO.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_c(YC.Row(t));  CuSubMatrix<BaseFloat> YC_t(YC.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_h(YH.Row(t));  CuSubMatrix<BaseFloat> YH_t(YH.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_m(YM.Row(t));  CuSubMatrix<BaseFloat> YM_t(YM.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_r(YR.Row(t));  CuSubMatrix<BaseFloat> YR_t(YR.RowRange(t,1));  
 
-            CuSubMatrix<BaseFloat> y_gifo(Y_gifo.RowRange(t,1));
+            CuSubVector<BaseFloat> y_gifo(YGIFO.Row(t));
     
             if (t > 0) {
-                // recursion r(t-1) to g, i, f, o
-                y_gifo.AddMatMat(1.0, Y_r.RowRange(t-1,1), kNoTrans, w_gifo_r_, kTrans, 1.0);
-                // peephole c(t-1) to i(t)
-                add_buf.CopyFromMat(Y_c.RowRange(t-1,1)); 
-                add_buf.MulColsVec(peephole_i_c_);
-                y_i.AddMat(1.0, add_buf);
-                // peephole c(t-1) to f(t)
-                add_buf.CopyFromMat(Y_c.RowRange(t-1,1));
-                add_buf.MulColsVec(peephole_f_c_);
-                y_f.AddMat(1.0, add_buf);
+                // recursion r(t-1) -> g, i, f, o
+                y_gifo.AddMatVec(1.0, w_gifo_r_, kNoTrans, YR.Row(t-1), 1.0);
+                // peephole c(t-1) -> i(t)
+                y_i.AddVecVec(1.0, peephole_i_c_, YC.Row(t-1), 1.0);
+                // peephole c(t-1) -> f(t)
+                y_f.AddVecVec(1.0, peephole_f_c_, YC.Row(t-1), 1.0);
             }
 
             // i, f sigmoid squashing
-            y_i.Sigmoid(y_i);
-            y_f.Sigmoid(y_f);
+            YI_t.Sigmoid(YI_t);
+            YF_t.Sigmoid(YF_t);
     
             // g tanh squashing
-            y_g.Tanh(y_g);
+            YG_t.Tanh(YG_t);
     
             // c memory cell
-            if (t > 0) {  // CEC connection via forget gate
-                y_c.CopyFromMat(Y_c.RowRange(t-1,1));
-                y_c.MulElements(y_f);
+            y_c.AddVecVec(1.0, y_i, y_g, 0.0);
+            if (t > 0) {  // CEC connection via forget gate: c(t-1) -> c(t)
+                y_c.AddVecVec(1.0, y_f, YC.Row(t-1), 1.0);
             }
 
-            add_buf.CopyFromMat(y_g); 
-            add_buf.MulElements(y_i);
-            y_c.AddMat(1.0, add_buf);
-
-            // optional clipping of cell activation (google paper Interspeech2014)
-            y_c.ApplyFloor(-50);
-            y_c.ApplyCeiling(50);
+            YC_t.ApplyFloor(-50);   // optional clipping of cell activation
+            YC_t.ApplyCeiling(50);  // google paper Interspeech2014: LSTM for LVCSR
     
             // h tanh squashing
-            y_h.CopyFromMat(y_c);
-            y_h.Tanh(y_h);
+            YH_t.Tanh(YC_t);
     
             // o output gate
-            add_buf.CopyFromMat(y_c);
-            add_buf.MulColsVec(peephole_o_c_);
-            y_o.AddMat(1.0, add_buf);
-            y_o.Sigmoid(y_o);
+            y_o.AddVecVec(1.0, peephole_o_c_, y_c, 1.0);  // notice: output gate peephole is not recursive
+            YO_t.Sigmoid(YO_t);
     
             // m
-            y_m.CopyFromMat(y_h);
-            y_m.MulElements(y_o);
+            y_m.AddVecVec(1.0, y_o, y_h, 0.0);
             
             // r
-            y_r.AddMatMat(1.0, y_m, kNoTrans, w_r_m_, kTrans, 0.0);
+            y_r.AddMatVec(1.0, w_r_m_, kNoTrans, y_m, 0.0);
 
-            // TODO: add non-recursive node in projection layer (projection layer is full recursive for now)
-            out->RowRange(t,1).CopyFromMat(y_r);
-
-            //// debug info
-            //std::cerr << "forward frame " << t << "\n";
-            //std::cerr << "y_g " << y_g;
-            //std::cerr << "y_i " << y_i;
-            //std::cerr << "y_f " << y_f;
-            //std::cerr << "y_o " << y_o;
-            //std::cerr << "y_gifo " << y_gifo;
-            //std::cerr << "y_c " << y_c;
-            //std::cerr << "y_h " << y_h;
-            //std::cerr << "y_m " << y_m;
-            //std::cerr << "y_r " << y_r;
-            //std::cerr << "y " << y;
+            if (DEBUG) {
+                std::cerr << "propagate frame " << t << "\n";
+                std::cerr << "activation of g: " << y_g;
+                std::cerr << "activation of i: " << y_i;
+                std::cerr << "activation of f: " << y_f;
+                std::cerr << "activation of o: " << y_o;
+                std::cerr << "activation of c: " << y_c;
+                std::cerr << "activation of h: " << y_h;
+                std::cerr << "activation of m: " << y_m;
+                std::cerr << "activation of r: " << y_r;
+            }
         }
+
+        // recurrent projection layer is also feed-forward as LSTM output
+        out->CopyFromMat(YR);
     }
 
     void BackpropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &out,
                             const CuMatrixBase<BaseFloat> &out_diff, CuMatrixBase<BaseFloat> *in_diff) {
+        int DEBUG = 0;
         int32 T = in.NumRows();
+        // disassemble propagated buffer into neurons
+        CuSubMatrix<BaseFloat> YG(propagate_buf_.ColRange(0*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YI(propagate_buf_.ColRange(1*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YF(propagate_buf_.ColRange(2*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YO(propagate_buf_.ColRange(3*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YC(propagate_buf_.ColRange(4*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YH(propagate_buf_.ColRange(5*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YM(propagate_buf_.ColRange(6*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> YR(propagate_buf_.ColRange(7*ncell_, nrecur_));
     
-        // propagated buffers already computed
-        CuSubMatrix<BaseFloat> Y_g(propagate_buf_.ColRange(0*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_i(propagate_buf_.ColRange(1*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_f(propagate_buf_.ColRange(2*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_o(propagate_buf_.ColRange(3*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_c(propagate_buf_.ColRange(4*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_h(propagate_buf_.ColRange(5*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_m(propagate_buf_.ColRange(6*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> Y_r(propagate_buf_.ColRange(7*ncell_, nrecur_));
-    
-        // backpropagate buffers to compute
+        // 0-init backpropagate buffer
         backpropagate_buf_.Resize(T, 7 * ncell_ + nrecur_, kSetZero);
 
-        CuSubMatrix<BaseFloat> D_g(backpropagate_buf_.ColRange(0*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_i(backpropagate_buf_.ColRange(1*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_f(backpropagate_buf_.ColRange(2*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_o(backpropagate_buf_.ColRange(3*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_c(backpropagate_buf_.ColRange(4*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_h(backpropagate_buf_.ColRange(5*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_m(backpropagate_buf_.ColRange(6*ncell_, ncell_));
-        CuSubMatrix<BaseFloat> D_r(backpropagate_buf_.ColRange(7*ncell_, nrecur_));
+        // disassemble backpropagate buffer into neurons
+        CuSubMatrix<BaseFloat> DG(backpropagate_buf_.ColRange(0*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DI(backpropagate_buf_.ColRange(1*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DF(backpropagate_buf_.ColRange(2*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DO(backpropagate_buf_.ColRange(3*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DC(backpropagate_buf_.ColRange(4*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DH(backpropagate_buf_.ColRange(5*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DM(backpropagate_buf_.ColRange(6*ncell_, ncell_));
+        CuSubMatrix<BaseFloat> DR(backpropagate_buf_.ColRange(7*ncell_, nrecur_));
 
-        CuSubMatrix<BaseFloat> D_gifo(backpropagate_buf_.ColRange(0, 4*ncell_));
-    
-        CuMatrix<BaseFloat> add_buf(1, ncell_, kUndefined);
+        CuSubMatrix<BaseFloat> DGIFO(backpropagate_buf_.ColRange(0, 4*ncell_));
+
+        // projection layer to LSTM output is not recursive, so backprop it all in once
+        DR.CopyFromMat(out_diff);
+
         for (int t = T-1; t >= 0; t--) {
-            CuSubMatrix<BaseFloat> y_g(Y_g.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_i(Y_i.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_f(Y_f.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_o(Y_o.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_c(Y_c.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_h(Y_h.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_m(Y_m.RowRange(t,1));
-            CuSubMatrix<BaseFloat> y_r(Y_r.RowRange(t,1));
+            // vector representation                  // matrix representation
+            CuSubVector<BaseFloat> y_g(YG.Row(t));    CuSubMatrix<BaseFloat> YG_t(YG.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_i(YI.Row(t));    CuSubMatrix<BaseFloat> YI_t(YI.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_f(YF.Row(t));    CuSubMatrix<BaseFloat> YF_t(YF.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_o(YO.Row(t));    CuSubMatrix<BaseFloat> YO_t(YO.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_c(YC.Row(t));    CuSubMatrix<BaseFloat> YC_t(YC.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_h(YH.Row(t));    CuSubMatrix<BaseFloat> YH_t(YH.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_m(YM.Row(t));    CuSubMatrix<BaseFloat> YM_t(YM.RowRange(t,1));  
+            CuSubVector<BaseFloat> y_r(YR.Row(t));    CuSubMatrix<BaseFloat> YR_t(YR.RowRange(t,1));  
     
-            CuSubMatrix<BaseFloat> d_g(D_g.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_i(D_i.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_f(D_f.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_o(D_o.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_c(D_c.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_h(D_h.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_m(D_m.RowRange(t,1));
-            CuSubMatrix<BaseFloat> d_r(D_r.RowRange(t,1));
-    
-            CuSubMatrix<BaseFloat> d_gifo(D_gifo.RowRange(t,1));
-    
-            // r
-            d_r.CopyFromMat(out_diff.RowRange(t,1));
+            CuSubVector<BaseFloat> d_g(DG.Row(t));    CuSubMatrix<BaseFloat> DG_t(DG.RowRange(t,1));
+            CuSubVector<BaseFloat> d_i(DI.Row(t));    CuSubMatrix<BaseFloat> DI_t(DI.RowRange(t,1));
+            CuSubVector<BaseFloat> d_f(DF.Row(t));    CuSubMatrix<BaseFloat> DF_t(DF.RowRange(t,1));
+            CuSubVector<BaseFloat> d_o(DO.Row(t));    CuSubMatrix<BaseFloat> DO_t(DO.RowRange(t,1));
+            CuSubVector<BaseFloat> d_c(DC.Row(t));    CuSubMatrix<BaseFloat> DC_t(DC.RowRange(t,1));
+            CuSubVector<BaseFloat> d_h(DH.Row(t));    CuSubMatrix<BaseFloat> DH_t(DH.RowRange(t,1));
+            CuSubVector<BaseFloat> d_m(DM.Row(t));    CuSubMatrix<BaseFloat> DM_t(DM.RowRange(t,1));
+            CuSubVector<BaseFloat> d_r(DR.Row(t));    CuSubMatrix<BaseFloat> DR_t(DR.RowRange(t,1));
     
             if (t < T-1) {
-                // in Alex Grave's PhD dissertation,
-                // he didn't backpropagate error from i(t+1), f(t+1), o(t+1) to r(t),
-                // we compute precise gradient here anyway
-                d_r.AddMatMat(1.0, D_gifo.RowRange(t+1,1), kNoTrans, w_gifo_r_, kNoTrans, 1.0);
+                // Alex Graves didn't backpropagate error from i(t+1), f(t+1), o(t+1) to r(t) 
+                // in his PhD dissertation, however, we compute *precise* gradient here
+                d_r.AddMatVec(1.0, w_gifo_r_, kTrans, DGIFO.Row(t+1), 1.0);
             }
     
             // m
-            d_m.AddMatMat(1.0, d_r, kNoTrans, w_r_m_, kNoTrans, 0.0);
+            d_m.AddMatVec(1.0, w_r_m_, kTrans, d_r, 0.0);
     
             // h
-            d_h.CopyFromMat(d_m); d_h.MulElements(y_o);
-            d_h.DiffTanh(y_h, d_h);
+            d_h.AddVecVec(1.0, y_o, d_m, 0.0);
+            DH_t.DiffTanh(YH_t, DH_t);
     
             // o
-            d_o.CopyFromMat(d_m); d_o.MulElements(y_h);
-            d_o.DiffSigmoid(y_o, d_o);
+            d_o.AddVecVec(1.0, y_h, d_m, 1.0);
+            DO_t.DiffSigmoid(YO_t, DO_t);
     
             // c
             //     1. diff from h(t)
-            d_c.CopyFromMat(d_h);  
+            d_c.AddVec(1.0, d_h, 0.0);  
             //     2. diff from output-gate(t) (via peephole)
-            add_buf.CopyFromMat(d_o); add_buf.MulColsVec(peephole_o_c_);  
-            d_c.AddMat(1.0, add_buf);  
+            d_c.AddVecVec(1.0, peephole_o_c_, d_o, 1.0);
     
             if (t < T-1) {
                 // 3. diff from c(t+1) (via forget-gate between CEC)
-                add_buf.CopyFromMat(D_c.RowRange(t+1,1)); add_buf.MulElements(Y_f.RowRange(t+1,1));  
-                d_c.AddMat(1.0, add_buf);  
+                d_c.AddVecVec(1.0, YF.Row(t+1), DC.Row(t+1), 1.0);
                 // 4. diff from forget-gate(t+1) (via peephole)
-                add_buf.CopyFromMat(D_f.RowRange(t+1,1)); add_buf.MulColsVec(peephole_f_c_);  
-                d_c.AddMat(1.0, add_buf);
+                d_c.AddVecVec(1.0, peephole_f_c_ , DF.Row(t+1), 1.0);
                 // 5. diff from input-gate(t+1) (via peephole)
-                add_buf.CopyFromMat(D_i.RowRange(t+1,1)); add_buf.MulColsVec(peephole_i_c_);  
-                d_c.AddMat(1.0, add_buf);
+                d_c.AddVecVec(1.0, peephole_i_c_, DI.Row(t+1), 1.0);
             }
     
             // f
             if (t > 0) {
-                d_f.CopyFromMat(d_c);
-                d_f.MulElements(Y_c.RowRange(t-1,1));
-                d_f.DiffSigmoid(y_f, d_f);
+                d_f.AddVecVec(1.0, YC.Row(t-1), d_c, 0.0);
+                DF_t.DiffSigmoid(YF_t, DF_t);
             }
     
             // i
-            d_i.CopyFromMat(d_c);
-            d_i.MulElements(y_g);
-            d_i.DiffSigmoid(y_i, d_i);
+            d_i.AddVecVec(1.0, y_g, d_c, 0.0);
+            DI_t.DiffSigmoid(YI_t, DI_t);
     
             // g
-            d_g.CopyFromMat(d_c);
-            d_g.MulElements(y_i);
-            d_g.DiffTanh(y_g, d_g);
+            d_g.AddVecVec(1.0, y_i, d_c, 0.0);
+            DG_t.DiffTanh(YG_t, DG_t);
     
-            // x
-            in_diff->RowRange(t,1).AddMatMat(1.0, d_gifo, kNoTrans, w_gifo_x_, kNoTrans, 0.0);
-    
-            //// debug info
-            //std::cerr << "backward frame " << t << "\n";
-            //std::cerr << "d_y " << out_diff.RowRange(t,1);
-            //std::cerr << "d_r " << d_r;
-            //std::cerr << "d_m " << d_m;
-            //std::cerr << "d_h " << d_h;
-            //std::cerr << "d_o " << d_o;
-            //std::cerr << "d_c " << d_c;
-            //std::cerr << "d_f " << d_f;
-            //std::cerr << "d_i " << d_i;
-            //std::cerr << "d_g " << d_g;
-            //std::cerr << "d_gifo " << d_gifo;
-            //std::cerr << "d_x " << in_diff->RowRange(t,1);
+            // debug info
+            if (DEBUG) {
+                std::cerr << "backprop frame " << t << "\n";
+                std::cerr << "derivative of input y " << out_diff.RowRange(t,1);
+                std::cerr << "derivative of input r " << d_r;
+                std::cerr << "derivative of input m " << d_m;
+                std::cerr << "derivative of input h " << d_h;
+                std::cerr << "derivative of input o " << d_o;
+                std::cerr << "derivative of input c " << d_c;
+                std::cerr << "derivative of input f " << d_f;
+                std::cerr << "derivative of input i " << d_i;
+                std::cerr << "derivative of input g " << d_g;
+            }
         }
+
+        // backprop derivatives to input x, do it all in once
+        in_diff->AddMatMat(1.0, DGIFO, kNoTrans, w_gifo_x_, kNoTrans, 0.0);
     
         // calculate delta
         const BaseFloat lr = opts_.learn_rate;
         const BaseFloat mmt = opts_.momentum;
     
-        w_gifo_x_corr_.AddMatMat(-lr, D_gifo, kTrans, in, kNoTrans, mmt);
-        w_gifo_r_corr_.AddMatMat(-lr, D_gifo.RowRange(1,T-1), kTrans, Y_r.RowRange(0,T-1), kNoTrans, mmt);
-        bias_corr_.AddRowSumMat(-lr, D_gifo, mmt);
-    
-        CuMatrix<BaseFloat> buf(T, ncell_, kUndefined);
-    
-        buf.SetZero();
-        buf.RowRange(0,T-1).CopyFromMat(Y_c.RowRange(0,T-1));
-        buf.RowRange(0,T-1).MulElements(D_i.RowRange(1, T-1));
-        peephole_i_c_corr_.AddRowSumMat(-lr, buf.RowRange(0,T-1), mmt);
-    
-        buf.SetZero();
-        buf.RowRange(0,T-1).CopyFromMat(Y_c.RowRange(0,T-1));
-        buf.RowRange(0,T-1).MulElements(D_f.RowRange(1, T-1));
-        peephole_f_c_corr_.AddRowSumMat(-lr, buf.RowRange(0,T-1), mmt);
-    
-        buf.SetZero();
-        buf.CopyFromMat(Y_c);
-        buf.MulElements(D_o);
-        peephole_o_c_corr_.AddRowSumMat(-lr, buf, mmt);
+        w_gifo_x_corr_.AddMatMat(-lr, DGIFO, kTrans, in, kNoTrans, mmt);
+        w_gifo_r_corr_.AddMatMat(-lr, DGIFO.RowRange(1,T-1), kTrans, YR.RowRange(0,T-1), kNoTrans, mmt);
 
-        w_r_m_corr_.AddMatMat(-lr, D_r, kTrans, Y_m, kNoTrans, mmt);
+        bias_corr_.AddRowSumMat(-lr, DGIFO, mmt);
     
-        //// debug info
-        //std::cerr << "delta: \n";
-        //std::cerr << "w_gifo_x_corr_ " << w_gifo_x_corr_;
-        //std::cerr << "w_gifo_r_corr_ " << w_gifo_r_corr_;
-        //std::cerr << "bias_corr_ " << bias_corr_;
-        //std::cerr << "w_r_m_corr_ " << w_r_m_corr_;
-        //std::cerr << "peephole_i_c_corr_ " << peephole_i_c_corr_;
-        //std::cerr << "peephole_f_c_corr_ " << peephole_f_c_corr_;
-        //std::cerr << "peephole_o_c_corr_ " << peephole_o_c_corr_;
+        peephole_i_c_corr_.AddDiagMatMat(-lr, DI.RowRange(1,T-1), kTrans, YC.RowRange(0,T-1), kNoTrans, mmt);
+        peephole_f_c_corr_.AddDiagMatMat(-lr, DF.RowRange(1,T-1), kTrans, YC.RowRange(0,T-1), kNoTrans, mmt);
+        peephole_o_c_corr_.AddDiagMatMat(-lr, DO                , kTrans, YC                , kNoTrans, mmt);
+
+        w_r_m_corr_.AddMatMat(-lr, DR, kTrans, YM, kNoTrans, mmt);
     
+        if (DEBUG) {
+            std::cerr << "update delta: \n";
+            std::cerr << "w_gifo_x_corr_ " << w_gifo_x_corr_;
+            std::cerr << "w_gifo_r_corr_ " << w_gifo_r_corr_;
+            std::cerr << "bias_corr_ " << bias_corr_;
+            std::cerr << "w_r_m_corr_ " << w_r_m_corr_;
+            std::cerr << "peephole_i_c_corr_ " << peephole_i_c_corr_;
+            std::cerr << "peephole_f_c_corr_ " << peephole_f_c_corr_;
+            std::cerr << "peephole_o_c_corr_ " << peephole_o_c_corr_;
+        }
     }
 
     void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> &diff) {
         w_gifo_x_.AddMat(1.0, w_gifo_x_corr_);
         w_gifo_r_.AddMat(1.0, w_gifo_r_corr_);
-        bias_.AddVec(1.0, bias_corr_);
+        bias_.AddVec(1.0, bias_corr_, 1.0);
     
-        peephole_i_c_.AddVec(1.0, peephole_i_c_corr_);
-        peephole_f_c_.AddVec(1.0, peephole_f_c_corr_);
-        peephole_o_c_.AddVec(1.0, peephole_o_c_corr_);
+        peephole_i_c_.AddVec(1.0, peephole_i_c_corr_, 1.0);
+        peephole_f_c_.AddVec(1.0, peephole_f_c_corr_, 1.0);
+        peephole_o_c_.AddVec(1.0, peephole_o_c_corr_, 1.0);
     
         w_r_m_.AddMat(1.0, w_r_m_corr_);
     }
 
 private:
-    /* network topology parameters */
-    int32 input_dim_;
-    int32 output_dim_;
-    bool inverse_;
+    // network topology parameters
     int32 ncell_;   // number of cells (one cell per memory block)
     int32 nrecur_;  // size of recurrent projection layer
 
