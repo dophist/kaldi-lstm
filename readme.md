@@ -17,6 +17,6 @@ First google LSTM paper also introduce a non-recurrent projection layer, which a
 Time-shift component serves for the target delay in LSTM.
 
 TODO:  
-* Because limited APIs in CuVector, so in current code I use both vector and matrix representations. This seems to be a bit redundant. May add extra API to CuVector later.  
+* Due to limited APIs of CuVector, current code uses both vector and matrix representations for computation. Seems redundant.
 * bi-directional LSTM  
 
