@@ -5,18 +5,19 @@ Diagram
 ![Diagram](https://raw.githubusercontent.com/dophist/kaldi-lstm/master/misc/LSTM_DIAG_EQUATION.jpg)
 
 Notes:  
-* bold arrow: full connection (full matrix)  
-* slim arrow: diagonal connection(vector)  
-* purple arrow: peephole connection  
-* red arrow: LSTM adaptive gate connection  
+---
+* peephole connection(purple) are diagonal
+* output-gate peephole is not recursive
+* dashed arrows: adaptive weight, i.e activations of (input gate, forget gate, output gate)
+* equations above contains some trivial typos, refer to diagrams above.
 
-
-First google LSTM paper also introduce a non-recurrent projection layer, which are not used in their LSTM for LVCSR(Interspeech 2014 paper), so I didnot implement this.
-
-
-Time-shift component serves for the target delay in LSTM.
+p.s time-shift component is used for target delay. Set <Shift> 5 to delay targets by 5 frames.
 
 TODO:  
-* Due to limited APIs of CuVector, current code uses both vector and matrix representations for computation. Seems redundant.
+---
+* Due to limited APIs of CuVector, current code mixes both vector and matrix representations for computation. 
+May add DiffSigmoid, DiffTanh to CuVector to clean it up.
 * bi-directional LSTM  
+* more optimisations
+* may implement non-recurrent projection layer, although Google "LSTM for LVCSR" paper (2014 Interspeech) uses only recurrent projection layer.
 
