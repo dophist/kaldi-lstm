@@ -17,6 +17,7 @@
  * h: squashing neuron near output
  * m: output neuron of Memory block
  * r: recurrent projection neuron
+ * y: output neuron of LSTMP
  *************************************/
 
 namespace kaldi {
@@ -26,7 +27,7 @@ public:
     LstmProjection(int32 input_dim, int32 output_dim) :
         UpdatableComponent(input_dim, output_dim),
         ncell_(0),
-        nrecur_(output_dim)  // recurrent projection layer is also feed-forward as LSTM output
+        nrecur_(output_dim)
     { }
 
     ~LstmProjection()
@@ -257,7 +258,7 @@ public:
             y_r.AddMatVec(1.0, w_r_m_, kNoTrans, y_m, 0.0);
 
             if (DEBUG) {
-                std::cerr << "propagate frame " << t << "\n";
+                std::cerr << "forward-pass frame " << t << "\n";
                 std::cerr << "activation of g: " << y_g;
                 std::cerr << "activation of i: " << y_i;
                 std::cerr << "activation of f: " << y_f;
@@ -325,10 +326,25 @@ public:
             CuSubVector<BaseFloat> d_m(DM.Row(t));    CuSubMatrix<BaseFloat> DM_t(DM.RowRange(t,1));
             CuSubVector<BaseFloat> d_r(DR.Row(t));    CuSubMatrix<BaseFloat> DR_t(DR.RowRange(t,1));
     
+            // r
             if (t < T-1) {
-                // Alex Graves didn't backpropagate error from i(t+1), f(t+1), o(t+1) to r(t) 
-                // in his PhD dissertation, however, we compute *precise* gradient here
+                // Version 1 (precise gradients): 
+                // backprop error from g(t+1), i(t+1), f(t+1), o(t+1) to r(t)
                 d_r.AddMatVec(1.0, w_gifo_r_, kTrans, DGIFO.Row(t+1), 1.0);
+
+                /*
+                // Version 2 (Alex Graves' PhD dissertation): 
+                // only backprop g(t+1) to r(t) 
+                CuSubMatrix<BaseFloat> w_g_r_(w_gifo_r_.RowRange(0, ncell_));
+                d_r.AddMatVec(1.0, w_g_r_, kTrans, DG.Row(t+1), 1.0);
+                */
+
+                /*
+                // Version 3 (Felix Gers' PhD dissertation): 
+                // truncate gradients of g(t+1), i(t+1), f(t+1), o(t+1) once they leak out memory block
+                // CEC(with forget connection) is the only "error-bridge" through time
+                ;
+                */
             }
     
             // m
@@ -373,16 +389,16 @@ public:
     
             // debug info
             if (DEBUG) {
-                std::cerr << "backprop frame " << t << "\n";
-                std::cerr << "derivative of input y " << out_diff.RowRange(t,1);
-                std::cerr << "derivative of input r " << d_r;
-                std::cerr << "derivative of input m " << d_m;
-                std::cerr << "derivative of input h " << d_h;
-                std::cerr << "derivative of input o " << d_o;
-                std::cerr << "derivative of input c " << d_c;
-                std::cerr << "derivative of input f " << d_f;
-                std::cerr << "derivative of input i " << d_i;
-                std::cerr << "derivative of input g " << d_g;
+                std::cerr << "backward-pass frame " << t << "\n";
+                std::cerr << "derivative w.r.t input y " << out_diff.RowRange(t,1);
+                std::cerr << "derivative w.r.t input r " << d_r;
+                std::cerr << "derivative w.r.t input m " << d_m;
+                std::cerr << "derivative w.r.t input h " << d_h;
+                std::cerr << "derivative w.r.t input o " << d_o;
+                std::cerr << "derivative w.r.t input c " << d_c;
+                std::cerr << "derivative w.r.t input f " << d_f;
+                std::cerr << "derivative w.r.t input i " << d_i;
+                std::cerr << "derivative w.r.t input g " << d_g;
             }
         }
 
@@ -390,22 +406,20 @@ public:
         in_diff->AddMatMat(1.0, DGIFO, kNoTrans, w_gifo_x_, kNoTrans, 0.0);
     
         // calculate delta
-        const BaseFloat lr = opts_.learn_rate;
         const BaseFloat mmt = opts_.momentum;
     
-        w_gifo_x_corr_.AddMatMat(-lr, DGIFO, kTrans, in, kNoTrans, mmt);
-        w_gifo_r_corr_.AddMatMat(-lr, DGIFO.RowRange(1,T-1), kTrans, YR.RowRange(0,T-1), kNoTrans, mmt);
-
-        bias_corr_.AddRowSumMat(-lr, DGIFO, mmt);
+        w_gifo_x_corr_.AddMatMat(1.0, DGIFO                , kTrans, in                , kNoTrans, mmt);
+        w_gifo_r_corr_.AddMatMat(1.0, DGIFO.RowRange(1,T-1), kTrans, YR.RowRange(0,T-1), kNoTrans, mmt);
+        bias_corr_.AddRowSumMat(1.0, DGIFO, mmt);
     
-        peephole_i_c_corr_.AddDiagMatMat(-lr, DI.RowRange(1,T-1), kTrans, YC.RowRange(0,T-1), kNoTrans, mmt);
-        peephole_f_c_corr_.AddDiagMatMat(-lr, DF.RowRange(1,T-1), kTrans, YC.RowRange(0,T-1), kNoTrans, mmt);
-        peephole_o_c_corr_.AddDiagMatMat(-lr, DO                , kTrans, YC                , kNoTrans, mmt);
+        peephole_i_c_corr_.AddDiagMatMat(1.0, DI.RowRange(1,T-1), kTrans, YC.RowRange(0,T-1), kNoTrans, mmt);
+        peephole_f_c_corr_.AddDiagMatMat(1.0, DF.RowRange(1,T-1), kTrans, YC.RowRange(0,T-1), kNoTrans, mmt);
+        peephole_o_c_corr_.AddDiagMatMat(1.0, DO                , kTrans, YC                , kNoTrans, mmt);
 
-        w_r_m_corr_.AddMatMat(-lr, DR, kTrans, YM, kNoTrans, mmt);
+        w_r_m_corr_.AddMatMat(1.0, DR, kTrans, YM, kNoTrans, mmt);
     
         if (DEBUG) {
-            std::cerr << "update delta: \n";
+            std::cerr << "gradients(with optional momentum): \n";
             std::cerr << "w_gifo_x_corr_ " << w_gifo_x_corr_;
             std::cerr << "w_gifo_r_corr_ " << w_gifo_r_corr_;
             std::cerr << "bias_corr_ " << bias_corr_;
@@ -417,21 +431,72 @@ public:
     }
 
     void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> &diff) {
-        w_gifo_x_.AddMat(1.0, w_gifo_x_corr_);
-        w_gifo_r_.AddMat(1.0, w_gifo_r_corr_);
-        bias_.AddVec(1.0, bias_corr_, 1.0);
+        int DEBUG = 1;
+        int32 T = input.NumRows();
+        BaseFloat minibatch_scale = (T <= 200) ? 1.0 : (200.0 / T);
+        const BaseFloat lr  = opts_.learn_rate * minibatch_scale;
+
+        w_gifo_x_.AddMat(-lr, w_gifo_x_corr_);
+        w_gifo_r_.AddMat(-lr, w_gifo_r_corr_);
+        bias_.AddVec(-lr, bias_corr_, 1.0);
     
-        peephole_i_c_.AddVec(1.0, peephole_i_c_corr_, 1.0);
-        peephole_f_c_.AddVec(1.0, peephole_f_c_corr_, 1.0);
-        peephole_o_c_.AddVec(1.0, peephole_o_c_corr_, 1.0);
+        peephole_i_c_.AddVec(-lr, peephole_i_c_corr_, 1.0);
+        peephole_f_c_.AddVec(-lr, peephole_f_c_corr_, 1.0);
+        peephole_o_c_.AddVec(-lr, peephole_o_c_corr_, 1.0);
     
-        w_r_m_.AddMat(1.0, w_r_m_corr_);
+        w_r_m_.AddMat(-lr, w_r_m_corr_);
+
+        /* 
+          Here we deal with the famous "vanishing & exploding difficulties" in RNN learning.
+
+          LSTM architecture solves "vanishing problem" by introducing linear CEC as the "error bridge" across long time distance
+          however, "exploding problem" still exists in LSTM(due to large weight & deep time expension in BPTT)
+
+          To prevent gradients explosion, we enforce a L2 norm constraint on nonlinear neurons' fan-in weights
+          Large fan-in weight get scaled down.
+          (we also tried L2 regularization, which didn't work well)
+
+          Note that we scale bias together with weights as well, reasoning:
+          For each nonlinear neuron, its fan-in weights and bias are actually modeling a seperation hyperplane: W x + b = 0 
+          the squashing function then models a slope close to this hyperplane.
+          simultaneous scaling of W & b won't affect location of this hyper-plane, only the steepness of squashing slope is changed
+          so we are actually preserving already learned knowledge, while keeping weights small
+
+          Also note that keeping all weights in a reasonible range also makes the network well-conditioned.
+          we have observed faster convergence and performance gain via this method.
+        */
+
+        BaseFloat max_norm = 1.0;   // larger weight than 1.0 will cause exploding in a deep BPTT
+        CuMatrix<BaseFloat> L2_gifo_x(w_gifo_x_);
+        CuMatrix<BaseFloat> L2_gifo_r(w_gifo_r_);
+        L2_gifo_x.MulElements(w_gifo_x_);
+        L2_gifo_r.MulElements(w_gifo_r_);
+
+        CuVector<BaseFloat> L2_norm_gifo(L2_gifo_x.NumRows());
+        L2_norm_gifo.AddColSumMat(1.0, L2_gifo_x, 0.0);
+        L2_norm_gifo.AddColSumMat(1.0, L2_gifo_r, 1.0);
+        L2_norm_gifo.ApplyPow(0.5);
+
+        CuVector<BaseFloat> shrink(L2_norm_gifo);
+        shrink.Scale(1.0/max_norm);
+        shrink.ApplyFloor(1.0);
+        shrink.InvertElements();
+
+        w_gifo_x_.MulRowsVec(shrink);
+        w_gifo_r_.MulRowsVec(shrink);
+        bias_.MulElements(shrink);
+
+        if (DEBUG) {
+            if (shrink.Min() < 0.95) {
+                std::cerr << "shrinking coefs: " << shrink;
+            }
+        }
     }
 
 private:
     // network topology parameters
-    int32 ncell_;   // number of cells (one cell per memory block)
-    int32 nrecur_;  // size of recurrent projection layer
+    int32 ncell_;
+    int32 nrecur_;  // recurrent projection layer dim
 
     // feed-forward connections: from x to [g, i, f, o]
     CuMatrix<BaseFloat> w_gifo_x_;
