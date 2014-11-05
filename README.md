@@ -14,9 +14,26 @@ Currently implementation includes two versions:
 
 simple version:
 ---
-*Standard* LSTM with a recurrent projection layer. Go to "simple" directory for more details.
+This is standard LSTM implementation, using epoch-wise BPTT training algorithm.
+Support Cross-Entropy training and discriminative sequential training(MPE, sMBR)
 
 faster version:
 ---
-Same as *Google*, except it can be runned on CPU or GPU. Go to "faster" directory for more details.
+* standard LSTM with epoch-wised BPTT suffers from gradients exploding:
+When long sequence is presented, BPTT time unfolding becomes long, backward pass tends to blow up.
+This makes LSTM training in **large dataset** unstable.
+Google uses a "batched" BPTT (Tbptt=20), which greatly improves training stability.
+Inside an utterance, network states of previous batch are saved and bridged to the next batch as initial history states.
+* multiple utterances are processed simultaneously(4 utterances per CPU in Google's setup).
+I prefer to call this "multi-stream". This greatly speeds up the training.
+Another reason to do this "multi-stream" training is that all RNN algorithm is sequential, 
+particularly in epoch-wise BPTT, shuffling can only be done in utterance level, frame-level stochasticity is missing.
+Multi-stream training receives updates from different utterances at the same time, which improves stochasticity(we are actually using SGD), 
+
+TODO:  
+---
+* bi-directional LSTM  
+* simple version: now mixes both vector and matrix representations for computation. May add DiffSigmoid, DiffTanh to CuVector to clean it up.
+* faster version: add multi-stream discriminative sequential training(MMI, sMBR)
+* binary level code clean-up is nearly done. Script level code clean-up is on the way.
 
