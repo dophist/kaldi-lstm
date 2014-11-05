@@ -1,6 +1,0 @@
-<NnetProto>
-<TimeShift> <InputDim> 39 <OutputDim> 39 <Shift> 5
-<LstmProjection> <InputDim> 39 <OutputDim> 200 <CellDim> 512 <ParamScale> 0.02
-<AffineTransform> <InputDim> 200 <OutputDim> 178 <BiasMean> 0.000000 <BiasRange> 0.000000 <ParamStddev> 0.07
-<Softmax> <InputDim> 178 <OutputDim> 178
-</NnetProto>

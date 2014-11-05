@@ -166,7 +166,10 @@ public:
     }
 
     void Reset(std::vector<int> &reset_flag) {
-        prev_nnet_state_.SetZero();
+        KALDI_ASSERT(reset_flag.size() == 1);
+        if (reset_flag[0] == 1) {
+            prev_nnet_state_.SetZero();
+        }
     }
 
     void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {

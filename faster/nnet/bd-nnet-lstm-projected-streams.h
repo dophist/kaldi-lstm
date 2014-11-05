@@ -28,8 +28,8 @@ public:
         UpdatableComponent(input_dim, output_dim),
         ncell_(0),
         nrecur_(output_dim),
-        nstream_(0),
-        dropout_rate_(0.0)
+        //dropout_rate_(0.0),
+        nstream_(0)
     { }
 
     ~LstmProjectedStreams()
@@ -63,13 +63,14 @@ public:
                 ReadBasicType(is, false, &ncell_);
             else if (token == "<NumStream>") 
                 ReadBasicType(is, false, &nstream_);
-            else if (token == "<DropoutRate>") 
-                ReadBasicType(is, false, &dropout_rate_);
+            //else if (token == "<DropoutRate>") 
+            //    ReadBasicType(is, false, &dropout_rate_);
             else if (token == "<ParamScale>") 
                 ReadBasicType(is, false, &param_scale);
             else KALDI_ERR << "Unknown token " << token << ", a typo in config?"
-                           << " (CellDim|NumStream|DropoutRate|ParamScale)";
-            is >> std::ws; // eat-up whitespace
+                           << " (CellDim|NumStream|ParamScale)";
+                           //<< " (CellDim|NumStream|DropoutRate|ParamScale)";
+            is >> std::ws;
         }
 
         prev_nnet_state_.Resize(nstream_, 7*ncell_ + 1*nrecur_, kSetZero);
@@ -102,8 +103,8 @@ public:
         ReadBasicType(is, binary, &ncell_);
         ExpectToken(is, binary, "<NumStream>");
         ReadBasicType(is, binary, &nstream_);
-        ExpectToken(is, binary, "<DropoutRate>");
-        ReadBasicType(is, binary, &dropout_rate_);
+        //ExpectToken(is, binary, "<DropoutRate>");
+        //ReadBasicType(is, binary, &dropout_rate_);
 
         w_gifo_x_.Read(is, binary);
         w_gifo_r_.Read(is, binary);
@@ -134,8 +135,8 @@ public:
         WriteBasicType(os, binary, ncell_);
         WriteToken(os, binary, "<NumStream>");
         WriteBasicType(os, binary, nstream_);
-        WriteToken(os, binary, "<DropoutRate>");
-        WriteBasicType(os, binary, dropout_rate_);
+        //WriteToken(os, binary, "<DropoutRate>");
+        //WriteBasicType(os, binary, dropout_rate_);
 
         w_gifo_x_.Write(os, binary);
         w_gifo_r_.Write(os, binary);
@@ -215,16 +216,16 @@ public:
 
         // x -> g, i, f, o, not recurrent, do it all in once
         YGIFO.RowRange(1*S,T*S).AddMatMat(1.0, in, kNoTrans, w_gifo_x_, kTrans, 0.0);
-        // LSTM forward dropout 
-        // Google paper 2014: Recurrent Neural Network Regularization
-        // by Wojciech Zaremba, Ilya Sutskever, Oriol Vinyals
-        if (dropout_rate_ != 0.0) {
-            dropout_mask_.Resize(in.NumRows(), 4*ncell_, kUndefined);
-            dropout_mask_.SetRandUniform();     // [0,1]
-            dropout_mask_.Add(-dropout_rate_);  // [-dropout_rate, 1-dropout_rate_],
-            dropout_mask_.ApplyHeaviside();     // -tive -> 0.0, +tive -> 1.0
-            YGIFO.RowRange(1*S,T*S).MulElements(dropout_mask_);
-        }
+        //// LSTM forward dropout 
+        //// Google paper 2014: Recurrent Neural Network Regularization
+        //// by Wojciech Zaremba, Ilya Sutskever, Oriol Vinyals
+        //if (dropout_rate_ != 0.0) {
+        //    dropout_mask_.Resize(in.NumRows(), 4*ncell_, kUndefined);
+        //    dropout_mask_.SetRandUniform();     // [0,1]
+        //    dropout_mask_.Add(-dropout_rate_);  // [-dropout_rate, 1-dropout_rate_],
+        //    dropout_mask_.ApplyHeaviside();     // -tive -> 0.0, +tive -> 1.0
+        //    YGIFO.RowRange(1*S,T*S).MulElements(dropout_mask_);
+        //}
 
         // bias -> g, i, f, o
         YGIFO.RowRange(1*S,T*S).AddVecToRows(1.0, bias_);
@@ -427,10 +428,10 @@ public:
         // g,i,f,o -> x, do it all in once
         in_diff->AddMatMat(1.0, DGIFO.RowRange(1*S,T*S), kNoTrans, w_gifo_x_, kNoTrans, 0.0);
 
-        // backward pass dropout
-        if (dropout_rate_ != 0.0) {
-            in_diff->MulElements(dropout_mask_);
-        }
+        //// backward pass dropout
+        //if (dropout_rate_ != 0.0) {
+        //    in_diff->MulElements(dropout_mask_);
+        //}
     
         // calculate delta
         const BaseFloat mmt = opts_.momentum;
@@ -554,8 +555,8 @@ private:
     CuMatrix<BaseFloat> prev_nnet_state_;
 
     // non-recurrent dropout 
-    BaseFloat dropout_rate_;
-    CuMatrix<BaseFloat> dropout_mask_;
+    //BaseFloat dropout_rate_;
+    //CuMatrix<BaseFloat> dropout_mask_;
 
     // feed-forward connections: from x to [g, i, f, o]
     CuMatrix<BaseFloat> w_gifo_x_;

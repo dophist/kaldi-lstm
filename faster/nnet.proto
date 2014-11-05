@@ -1,0 +1,6 @@
+<NnetProto>
+<Transmit> <InputDim> 40 <OutputDim> 40
+<LstmProjectedStreams> <InputDim> 40 <OutputDim> 512 <CellDim> 800 <ParamScale> 0.01 <NumStream> 4
+<AffineTransform> <InputDim> 512 <OutputDim> 8000 <BiasMean> 0.000000 <BiasRange> 0.000000 <ParamStddev> 0.04
+<Softmax> <InputDim> 8000 <OutputDim> 8000
+</NnetProto>
