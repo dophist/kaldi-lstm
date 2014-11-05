@@ -11,5 +11,3 @@ Notes:
 * dashed arrows: adaptive weight, i.e activations of (input gate, forget gate, output gate)
 * equations above contains some trivial typos, refer to diagrams above.
 
-p.s time-shift component is used for target delay. Set <Shift> 5 to delay targets by 5 frames.
-
