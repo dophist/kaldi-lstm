@@ -1,6 +1,7 @@
 simple version
 ===
-This is standard LSTM implementation
+This is standard LSTM implementation, BPTT is performed on an utterance level.
+
 TODO:  
 ---
 * Due to limited APIs of CuVector, current code mixes both vector and matrix representations for computation. 
