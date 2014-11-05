@@ -15,11 +15,11 @@ Currently implementation includes two versions:
 
 ## faster version:
 ### batched-BPTT
-Standard LSTM with epoch-wised BPTT suffers from gradients exploding:  
-When long sequence is presented, BPTT time unfolding becomes long, backward pass tends to blow up.  
-This makes LSTM training in **large dataset** unstable.  
-Similar to BPTT(h,h-prime) by williams, Google uses a "batched" BPTT (Tbptt=20), which greatly improves training stability.  
-Inside an utterance, network states of previous batch are saved and bridged to the next batch as initial history states.  
+Standard LSTM with epoch-wised BPTT suffers from gradients exploding:
+When long sequence is presented, BPTT time unfolding becomes long, backward pass tends to blow up.
+This makes LSTM training in **large dataset** unstable.
+Similar to williams' BPTT(h,h-prime), Google uses a "batched" BPTT (Tbptt=20), which greatly improves training stability.
+Inside an utterance, network states of previous batch are saved and bridged to the next batch as initial history states.
 
 ### multi-stream training
 multiple utterances are processed simultaneously(4 utterances per CPU in Google's setup).
