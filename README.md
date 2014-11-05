@@ -9,5 +9,14 @@ Notes:
 * peephole connection(purple) are diagonal
 * output-gate peephole is not recursive
 * dashed arrows: adaptive weight, i.e activations of (input gate, forget gate, output gate)
-* equations above contains some trivial typos, refer to diagrams above.
+
+Currently implementation includes two versions:
+
+simple version:
+---
+*Standard* LSTM with a recurrent projection layer. Go to "simple" directory for more details.
+
+faster version:
+---
+Same as *Google*, except it can be runned on CPU or GPU. Go to "faster" directory for more details.
 
