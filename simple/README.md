@@ -1,6 +1,6 @@
 simple version
 ===
-This is standard LSTM implementation, BPTT is performed on an utterance level.
+This is standard LSTM implementation, using epoch-wise BPTT training algorithm.
 
 TODO:  
 ---
