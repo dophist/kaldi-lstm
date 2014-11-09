@@ -1,20 +1,20 @@
-# faster version
-To read more about this version, read the Google paper in this directory.
+# google's multi-stream version
+For architecture details, read the Google paper in this directory.
 
 notable modification to standard LSTM training includes:
 ### batched-BPTT
-Standard LSTM with epoch-wised BPTT suffers from gradients exploding:
-When long sequence is presented, BPTT time unfolding becomes long, backward pass tends to blow up.
-This makes LSTM training in **large dataset** unstable.
-Similar to williams' BPTT(h,h-prime), Google uses a "batched" BPTT (Tbptt=20), which greatly improves training stability.
-Inside an utterance, network states of previous batch are saved and bridged to the next batch as initial history states.
+As a special case to williams' BPTT(h,h-prime), Google uses a "batched" BPTT (Tbptt=20), this avoids the BPTT time-expension from being too deep, the gradients are less likely to blow up, hence greatly improves training stability in large data set.
+Inside an utterance, network states of previous batch are saved as history states and bridged into the next batch.
 
 ### multi-stream training
 multiple utterances are processed simultaneously(4 utterances per CPU in Google's setup).
-I prefer to call this "multi-stream". This greatly speeds up the training.
-Another reason to do this "multi-stream" training is that all RNN training algorithms are sequential, 
-particularly in epoch-wise BPTT, shuffling can only be done in utterance level, whereas frame-level stochasticity is missing.
-Multi-stream training receives updates from different utterances at the same time, which improves stochasticity(we are actually using SGD), 
+I prefer to call this "multi-stream": 
+* greatly speeds up the training.
+* add sample-level stochasticity, which is benefical in SGD.
+To make the second point more clear: epoch-wise BPTT shuffles the training data in utterance level, whereas frame-level stochasticity is missing due to the sequential nature of all RNN trainign algorithms. However, multi-stream training receives updates from different utterances at the same time, which improves stochasticity.
 
-P.S. due to the complexity of multi-stream training, many nnet1 codes are modified, including: cudamatrix & kaldi-matrix kernals, masked loss eval functions etc.
-For now i don't recommend to build this version yourself before I make this version "self-contained".  Try simple version first.
+P.S. modifications are made to multiple kaldi source codes, including: cudamatrix & kaldi-matrix kernals, loss functions etc.
+
+### TODO:
+* clean up this version, make it self-contained and easy to compile with kaldi codes
+* discriminative sequential training(MMI, sMBR) support
