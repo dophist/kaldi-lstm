@@ -8,8 +8,8 @@
 * dashed arrows: adaptive weight, i.e activations of (input gate, forget gate, output gate)
 
 Currently implementation includes two versions:
-* simple version
-* faster version
+* standard
+* google
 
 Go to sub-directory to get more details
 
