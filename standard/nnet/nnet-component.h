@@ -144,7 +144,7 @@ class Component {
   virtual std::string Info() const { return ""; }
   virtual std::string InfoGradient() const { return ""; }
 
-  // <jiayu>
+  // <jiayu> LSTM component will overload this method to do actuall history "reset"
   virtual void Reset(std::vector<int> &stream_reset_flag) { };
   // </jiayu>
 

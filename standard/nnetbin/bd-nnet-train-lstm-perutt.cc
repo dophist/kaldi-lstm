@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
     po.Register("use-gpu", &use_gpu, "yes|no|optional, only has effect if compiled with CUDA"); 
 
     //<jiayu>
-    int32 targets_delay=5;
+    int32 targets_delay=0;
     po.Register("targets-delay", &targets_delay, "---LSTM--- BPTT targets delay"); 
 
     int32 dump_interval=10000;
