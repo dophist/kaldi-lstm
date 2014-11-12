@@ -7,15 +7,22 @@ As a special case to williams' BPTT(h,h-prime), Google uses a "batched" BPTT (Tb
 Inside an utterance, network states of previous batch are saved as history states and bridged into the next batch.
 
 ### multi-stream training
-multiple utterances are processed simultaneously(4 utterances per CPU in Google's setup).
-I prefer to call this "multi-stream": 
+Multiple utterances are processed simultaneously(4 utterances per CPU in Google's setup). 
+
+I prefer the term "multi-stream" training
 * greatly speed up the training.
 * add sample-level stochasticity, which is benefical in SGD.
 
 To elaborate the second point: epoch-wise BPTT shuffles the training data in utterance level, whereas frame-level stochasticity is missing due to the sequential nature of all RNN trainign algorithms. However, multi-stream training receives updates from different utterances at the same time, which improves stochasticity.
 
-P.S. modifications are made to multiple kaldi source codes, including: cudamatrix & kaldi-matrix kernals, loss functions etc.
+The core LSTM algorithms are implemented in nnet/bd-nnet-lstm-projected-streams.h
 
-### TODO:
-* clean up this version, make it self-contained and easy to compile with kaldi codes
-* discriminative sequential training(MMI, sMBR) support
+To speed up the training and get rid of unnecessary matrix buffers, two methods are added to Matrix & CuMatrix:
+* AddMatDiagVec() 
+* AddMatDotMat()
+for more details, see codes in matrix/kaldi-matrix.{h.cc} & cudamatrix/cu-matrix.{h,cc}
+
+Due to the complexity of multi-stream training, a new eval method is added:
+* Xent::EvalMasked()
+for more details, see codes in nnet/nnet-loss.{h.cc}
+

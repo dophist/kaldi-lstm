@@ -3,7 +3,8 @@
 * Cross-Entropy training
 * Discriminative sequential training(MPE, sMBR)
 
-## binary level tools:
+## codes organisation:
+* nnet/bd-nnet-lstm-projected.h: core LSTM algorithms
 * nnetbin/bd-nnet-train-lstm-perutt.cc: Cross-Entropy training
 * nnetbin/bd-nnet-train-lstm-mpe-sequential.cc: discriminative sequential MPE/sMBR training
 
@@ -12,5 +13,5 @@
 
 ## TODO
 * bi-directional LSTM  
-* Now both vector and matrix representations are used mixed for computation, seemds a little redundent. May add DiffSigmoid, DiffTanh to CuVector to clean it up.
+* Now both vector and matrix representations are used mixed for computation, seems a little redundent. May add DiffSigmoid, DiffTanh to CuVector to clean it up.
 * Standard LSTM is vulnerable to gradient exploding if sequences are long and the date set is big. Currently I implement a modified L2 weight max-norm regularizaiton, may add gradient regularization later to further stablize the training.
