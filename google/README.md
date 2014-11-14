@@ -25,5 +25,6 @@ for more details, see codes in matrix/kaldi-matrix.{h.cc} & cudamatrix/cu-matrix
 
 Due to the complexity of multi-stream training, a new eval method is added:
 * Xent::EvalMasked()
+
 for more details, see codes in nnet/nnet-loss.{h.cc}
 
