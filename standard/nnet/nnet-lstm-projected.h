@@ -1,7 +1,25 @@
-// nnet/bd-nnet-lstm-projected.h
+// nnet/nnet-lstm-projected.h
+// nnet/nnet-affine-transform.h
 
-#ifndef BD_KALDI_NNET_LSTM_PROJECTED_H_
-#define BD_KALDI_NNET_LSTM_PROJECTED_H_
+// Copyright 2014 author: Jiayu DU, Wei LI @ Baidu Inc.
+
+// See ../../COPYING for clarification regarding multiple authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+//
+// THIS CODE IS PROVIDED *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+// WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+// MERCHANTABLITY OR NON-INFRINGEMENT.
+// See the Apache 2 License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef KALDI_NNET_LSTM_PROJECTED_H_
+#define KALDI_NNET_LSTM_PROJECTED_H_
 
 #include "nnet/nnet-component.h"
 #include "nnet/nnet-various.h"
@@ -66,7 +84,7 @@ public:
             is >> std::ws; // eat-up whitespace
         }
 
-        prev_nnet_state_.Resize(7*ncell_ + 1*nrecur_, kSetZero);
+        //prev_nnet_state_.Resize(7*ncell_ + 1*nrecur_, kSetZero);
 
         // init weight and bias (Uniform)
         w_gifo_x_.Resize(4*ncell_, input_dim_, kUndefined);  InitMatParam(w_gifo_x_, param_scale);
@@ -104,7 +122,7 @@ public:
 
         w_r_m_.Read(is, binary);
 
-        prev_nnet_state_.Resize(7*ncell_ + 1*nrecur_, kSetZero);
+        //prev_nnet_state_.Resize(7*ncell_ + 1*nrecur_, kSetZero);
 
         // init delta buffers
         w_gifo_x_corr_.Resize(4*ncell_, input_dim_, kSetZero); 
@@ -165,19 +183,23 @@ public:
             "\n  w_r_m_corr_  "        + MomentStatistics(w_r_m_corr_);
     }
 
-    void Reset(std::vector<int> &reset_flag) {
-        KALDI_ASSERT(reset_flag.size() == 1);
-        if (reset_flag[0] == 1) {
-            prev_nnet_state_.SetZero();
-        }
-    }
+//    void Reset(std::vector<int> &reset_flag) {
+//        KALDI_ASSERT(reset_flag.size() == 1);
+//        if (reset_flag[0] == 1) {
+//            prev_nnet_state_.SetZero();
+//        }
+//    }
 
     void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
         int DEBUG = 0;
         int32 T = in.NumRows();
         // resize & clear propagate buffers
         propagate_buf_.Resize(T+2, 7 * ncell_ + nrecur_, kSetZero);  // 0:forward pass history, [1, T]:current sequence, T+1:dummy
-        propagate_buf_.Row(0).CopyFromVec(prev_nnet_state_);
+
+	//// The reason I commented out the following line:
+	//// Now I make this component completely compatible with "nnet-train-perutt"
+	//// so each batch is actually a sentence, history should not be bridged between sentences
+        //propagate_buf_.Row(0).CopyFromVec(prev_nnet_state_);
 
         // disassemble entire neuron activation buffer into different neurons
         CuSubMatrix<BaseFloat> YG(propagate_buf_.ColRange(0*ncell_, ncell_));
@@ -260,8 +282,8 @@ public:
         // recurrent projection layer is also feed-forward as LSTM output
         out->CopyFromMat(YR.RowRange(1,T));
 
-        // now the last frame state becomes previous network state for next batch
-        prev_nnet_state_.CopyFromVec(propagate_buf_.Row(T));
+        //// now the last frame state becomes previous network state for next batch
+        //prev_nnet_state_.CopyFromVec(propagate_buf_.Row(T));
     }
 
     void BackpropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &out,
@@ -496,7 +518,7 @@ private:
     int32 nrecur_;  // recurrent projection layer dim
 
     //
-    CuVector<BaseFloat> prev_nnet_state_;
+    //CuVector<BaseFloat> prev_nnet_state_;
 
     // feed-forward connections: from x to [g, i, f, o]
     CuMatrix<BaseFloat> w_gifo_x_;
