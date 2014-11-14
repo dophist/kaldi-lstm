@@ -1,5 +1,5 @@
-#ifndef BD_KALDI_NNET_TIME_SHIFT_H_
-#define BD_KALDI_NNET_TIME_SHIFT_H_
+#ifndef KALDI_NNET_TIME_SHIFT_H_
+#define KALDI_NNET_TIME_SHIFT_H_
 
 #include "nnet/nnet-component.h"
 
