@@ -20,6 +20,7 @@ The core LSTM algorithms are implemented in nnet/bd-nnet-lstm-projected-streams.
 To speed up the training and get rid of unnecessary matrix buffers, two methods are added to Matrix & CuMatrix:
 * AddMatDiagVec() 
 * AddMatDotMat()
+
 for more details, see codes in matrix/kaldi-matrix.{h.cc} & cudamatrix/cu-matrix.{h,cc}
 
 Due to the complexity of multi-stream training, a new eval method is added:
