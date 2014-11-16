@@ -7,7 +7,8 @@
 
 Try it out.
 
-Note that for LSTM training in speech recognition, a common trick to make use of future context is to delay the targets(typically by 5),
+## Targets Delay
+Note that for LSTM training in speech recognition, future acoustic context can be beneficial for system performance: DNN achieves by splicing both left and right frames; In RNN model, this can be done by delaying the targets(typically by 5).
 So I also provide a "pre-processing" time-shift component to achieve targets delay, by advancing the features by 5 frames, see the code for details.
 
 ## TODO
