@@ -151,16 +151,45 @@ public:
         w_r_m_.Write(os, binary);
     }
 
-    // TODO
     int32 NumParams() const { 
-        return 1;
+        return ( w_gifo_x_.NumRows() * w_gifo_x_.NumCols() +
+                 w_gifo_r_.NumRows() * w_gifo_r_.NumCols() +
+                 bias_.Dim() +
+                 peephole_i_c_.Dim() +
+                 peephole_f_c_.Dim() +
+                 peephole_o_c_.Dim() +
+                 w_r_m_.NumRows() * w_r_m_.NumCols() );
     }
 
-    // TODO
     void GetParams(Vector<BaseFloat>* wei_copy) const {
         wei_copy->Resize(NumParams());
+
+        int32 offset, len;
+
+        offset = 0;    len = w_gifo_x_.NumRows() * w_gifo_x_.NumCols();
+        wei_copy->Range(offset, len).CopyRowsFromMat(w_gifo_x_);
+
+        offset += len; len = w_gifo_r_.NumRows() * w_gifo_r_.NumCols();
+        wei_copy->Range(offset, len).CopyRowsFromMat(w_gifo_r_);
+
+        offset += len; len = bias_.Dim();
+        wei_copy->Range(offset, len).CopyFromVec(bias_);
+
+        offset += len; len = peephole_i_c_.Dim();
+        wei_copy->Range(offset, len).CopyFromVec(peephole_i_c_);
+
+        offset += len; len = peephole_f_c_.Dim();
+        wei_copy->Range(offset, len).CopyFromVec(peephole_f_c_);
+
+        offset += len; len = peephole_o_c_.Dim();
+        wei_copy->Range(offset, len).CopyFromVec(peephole_o_c_);
+
+        offset += len; len = w_r_m_.NumRows() * w_r_m_.NumCols();
+        wei_copy->Range(offset, len).CopyRowsFromMat(w_r_m_);
+
         return;
     }
+
     std::string Info() const {
         return std::string("    ") + 
             "\n  w_gifo_x_  "     + MomentStatistics(w_gifo_x_) + 
