@@ -32,13 +32,13 @@ cv=$2
 ali=$3
 dir=$4
 
-feats_tr="scp:$tr/feats.scp"
-labels_tr="ark:gunzip -c $ali/ali.*.gz | ali-to-pdf $ali/final.mdl ark:- ark:- | ali-to-post ark:- ark:- |"
+tr_feats="scp:$tr/feats.scp"
+tr_labels="ark:gunzip -c $ali/ali.*.gz | ali-to-pdf $ali/final.mdl ark:- ark:- | ali-to-post ark:- ark:- |"
 
-feats_cv="scp:$cv/feats.scp"
-labels_cv="ark:gunzip -c $ali/ali.*.gz | ali-to-pdf $ali/final.mdl ark:- ark:- | ali-to-post ark:- ark:- |"
+cv_feats="scp:$cv/feats.scp"
+cv_labels="ark:gunzip -c $ali/ali.*.gz | ali-to-pdf $ali/final.mdl ark:- ark:- | ali-to-post ark:- ark:- |"
 
-feature_transform=$dir/feature_transform.nnet.txt # for mean-var normalisation
+feature_transform=$dir/feature_transform.nnet.txt  # for mean-var normalisation(Shift & Rescale component)
 nnet_init=$dir/nnet.init
 
 [ ! -d $dir ] && mkdir $dir
@@ -68,7 +68,7 @@ while [ $iter -lt $max_iters ]; do
         --targets-delay=$targets_delay \
         --dump-interval=$dump_interval \
         --verbose=$verbose \
-        $feats_tr "$labels_tr" $dir/nnet/nnet.iter${iter} $dir/nnet/nnet.iter$[iter+1] \
+        $tr_feats "$tr_labels" $dir/nnet/nnet.iter${iter} $dir/nnet/nnet.iter$[iter+1] \
         >& $dir/log/tr.iter$[iter+1].log
 
     # validate
@@ -82,7 +82,7 @@ while [ $iter -lt $max_iters ]; do
         --targets-delay=$targets_delay \
         --dump-interval=$dump_interval \
         --verbose=$verbose \
-        $feats_cv "$labels_cv" $dir/nnet/nnet.iter$[iter+1] \
+        $cv_feats "$cv_labels" $dir/nnet/nnet.iter$[iter+1] \
         >& $dir/log/cv.iter$[iter+1].log
 
     iter=$[iter+1]
