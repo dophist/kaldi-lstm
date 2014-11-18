@@ -38,7 +38,7 @@ tr_labels="ark:gunzip -c $ali/ali.*.gz | ali-to-pdf $ali/final.mdl ark:- ark:- |
 cv_feats="scp:$cv/feats.scp"
 cv_labels="ark:gunzip -c $ali/ali.*.gz | ali-to-pdf $ali/final.mdl ark:- ark:- | ali-to-post ark:- ark:- |"
 
-feature_transform=$dir/feature_transform.nnet.txt  # for mean-var normalisation(Shift & Rescale component)
+feature_transform=$dir/feature_transform.nnet.txt  # for mean-var normalisation(AddShift & Rescale component)
 nnet_init=$dir/nnet.init
 
 [ ! -d $dir ] && mkdir $dir
