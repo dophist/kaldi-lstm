@@ -14,5 +14,5 @@ So I also provide a "pre-processing" time-shift component to achieve targets del
 ## TODO
 * bi-directional LSTM  
 * Now both vector and matrix representations are used mixed for computation, seems a little redundent. May add DiffSigmoid, DiffTanh to CuVector to clean it up.
-* Standard LSTM is vulnerable to gradient exploding if sequences are long and the date set is big. Currently I implement a modified L2 weight max-norm regularizaiton, may add gradient regularization later to further stablize the training.
-* To achieve targets delay, it seems not efficient enough to shift features comparing to targets modification, I may add a kaldi-style "pipe" bin to do "online delay" of targets. But currently, doing time shift on features is just fine and not the performance bottle-neck. 
+* Standard LSTM is vulnerable to gradient exploding if sequences are long and the date set is big. Currently I implement a modified L2 weight max-norm regularizaiton, may add gradient regularization later to further stablize the training
+* implement RMS-prop update to make BPTT more robust(the algorithm is unpublished, but can be found in hinton's coursera NN course)
