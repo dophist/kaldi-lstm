@@ -465,9 +465,35 @@ public:
         }
     }
 
-    void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> &diff) {
-        const BaseFloat lr  = opts_.learn_rate;
+    void ClipGradMat(CuMatrixBase<BaseFloat> &M, BaseFloat thres) {
+        M.ApplyFloor(-thres);
+        M.ApplyCeiling(thres);
+    }   
 
+    void ClipGradVec(CuVectorBase<BaseFloat> &V, BaseFloat thres) {
+        Vector<BaseFloat> tmp(V);
+        tmp.ApplyFloor(-thres);
+        tmp.ApplyCeiling(thres);
+        V.CopyFromVec(tmp);
+    }
+
+    void Update(const CuMatrixBase<BaseFloat> &input, const CuMatrixBase<BaseFloat> &diff) {
+        // gradient clipping (element-wise)
+        BaseFloat max_grad = 50.0;
+
+        ClipGradMat(w_gifo_x_corr_, max_grad);
+        ClipGradMat(w_gifo_r_corr_, max_grad);
+
+        ClipGradVec(bias_corr_, max_grad);
+
+        ClipGradVec(peephole_i_c_corr_, max_grad);
+        ClipGradVec(peephole_f_c_corr_, max_grad);
+        ClipGradVec(peephole_o_c_corr_, max_grad);
+
+        ClipGradMat(w_r_m_corr_, max_grad);
+
+	// update
+        const BaseFloat lr  = opts_.learn_rate;
         w_gifo_x_.AddMat(-lr, w_gifo_x_corr_);
         w_gifo_r_.AddMat(-lr, w_gifo_r_corr_);
         bias_.AddVec(-lr, bias_corr_, 1.0);
