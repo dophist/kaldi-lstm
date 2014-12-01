@@ -14,4 +14,3 @@ So I also provide a "pre-processing" time-shift component to achieve targets del
 ## TODO
 * bi-directional LSTM  
 * Now both vector and matrix representations are used mixed for computation, seems a little redundent. May add DiffSigmoid, DiffTanh to CuVector to clean it up.
-* implement RMS-prop update to make BPTT more robust(the algorithm is unpublished, but can be found in hinton's coursera NN course)
