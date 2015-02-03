@@ -19,4 +19,4 @@ Go to sub-directory to get more details.
 * Google version: 
 	- convert binary nnet into text format via nnet-copy, and open text nnet with your text editor
 	- change "Transmit" component to "TimeShift", keep your <Shift> setup consistent with "--targets-delay" used in nnet-train-lstm-streams
-	- edit <LstmProjectedStreams> -> <LstmProjected>, remove <NumStream> tag, now the "google version" is converted to "standard version", and you can perform AM scoring via nnet-forward
+	- edit "LstmProjectedStreams" to "LstmProjected", remove "NumStream" tag, now the "google version" is converted to "standard version", and you can perform AM scoring via nnet-forward
