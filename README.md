@@ -14,8 +14,8 @@ Currently implementation includes two versions:
 Go to sub-directory to get more details.
 
 # FAQ
-## Q1. How to decode use LSTM AM?
-* Standard version: exactly the same as DNN, feed LSTM nnet into nnet-forward as AM scorer.
+## Q1. How to decode with LSTM?
+* Standard version: exactly the same as DNN, feed LSTM nnet into nnet-forward as AM scorer, remember nnet-forward don't have a mechanism to delay target, so "time-shift" component is needed to do this.
 * Google version: 
 	- convert binary nnet into text format via nnet-copy, and open text nnet with your text editor
 	- change "Transmit" component to "TimeShift", keep your <Shift> setup consistent with "--targets-delay" used in nnet-train-lstm-streams
