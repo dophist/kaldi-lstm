@@ -30,10 +30,10 @@ Go to sub-directory to get more details.
 ```
 
 ## Q2. How do I stack more than one layer of LSTM?
-In google's paper, two layers of medium-sized LSTM is the best setup to beat DNN on WER. Currently there isn't a direct binary tool to do so, but like above Q1, you can do this by text level editing:
-	- use some of your training data to train one layer LSTM nnet
-	- convert it into text format with nnet-copy with "--binary=false"
-	- insert a pre-initialized LSTM component between softmax and your pretrained LSTM, and you can feed all your training data to the stacked LSTM, e.g:
+In google's paper, two layers of medium-sized LSTM is the best setup to beat DNN on WER. You can do this by text level editing:
+* use some of your training data to train one layer LSTM nnet
+* convert it into text format with nnet-copy with "--binary=false"
+* insert a pre-initialized LSTM component text between softmax and your pretrained LSTM, and you can feed all your training data to the stacked LSTM, e.g:
 ```
 <Nnet>
 <Transmit> 40 40
