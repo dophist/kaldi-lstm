@@ -20,12 +20,14 @@ Go to sub-directory to get more details.
 	- convert binary nnet into text format via nnet-copy, and open text nnet with your text editor
 	- change "Transmit" component to "TimeShift", keep your <Shift> setup consistent with "--targets-delay" used in nnet-train-lstm-streams
 	- edit "LstmProjectedStreams" to "LstmProjected", remove "NumStream" tag, now the "google version" is converted to "standard version", and you can perform AM scoring via nnet-forward, e.g:
+```
 <Nnet>
 <TimeShift> 40 40 <Shift> 5
 <LstmProjected> 512 40 <CellDim> 800 [ ...
 <AffineTransform> 16624 512 <LearnRateCoef> 1 <BiasLearnRateCoef> 1 <MaxNorm> 0  [ ...
 <Softmax> 16624 16624
 </Nnet>
+```
 
 ## Q2. How do I stack more than one layer of LSTM?
 In google's paper, two layers of medium-sized LSTM is the best setup to beat DNN on WER. Currently there isn't a direct binary tool to do so, but like above Q1, you can do this by text level editing:
