@@ -43,3 +43,7 @@ In google's paper, two layers of medium-sized LSTM is the best setup to beat DNN
 <Softmax> 16624 16624
 </Nnet>
 ```
+## Q3. How do I know when to use "Transmit" or "TimeShift"?
+The key is how you apply "target-delay".  
+* standard version: the nnet should be trained with "TimeShift" because default nnet1 training tool (nnet-train-frame-shuf & nnet-train-perutt) doesn't provide target delay. 
+* google version: due to the complexity of multi-stream training, the training tool "nnet-train-lstm-streams" provides a option "--target-delay", so in multi-stream training, a dummy "Transmit" component is used for a trivial reason related to how nnet1 call Backpropagate(). But in testing time, the google version is first converted to standard version, so the "transmit" should also be switched to "TimeShift" during the conversion.
