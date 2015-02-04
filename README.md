@@ -47,3 +47,6 @@ In google's paper, two layers of medium-sized LSTM is the best setup to beat DNN
 The key is how you apply "target-delay".  
 * standard version: the nnet should be trained with "TimeShift" because default nnet1 training tool (nnet-train-frame-shuf & nnet-train-perutt) doesn't provide target delay. 
 * google version: due to the complexity of multi-stream training, the training tool "nnet-train-lstm-streams" provides an option "--target-delay", so in multi-stream training, a dummy "Transmit" component is used for a trivial reason related to how nnet1 calls Backpropagate(). But in testing time, the google version is first converted to standard version, so the "transmit" should also be switched to "TimeShift" during the conversion.
+
+## Q4. Why are the "dropout" codes commented out?
+I implemented the "forward-connection droping out" according another paper from google, but later I didn't implement dropout retention, so the effects of dropout are not tested at all, and I leave it commented out.
